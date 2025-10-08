@@ -24,6 +24,12 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  next();
+});
+
 // Database connection test endpoint
 app.get('/api/db-test', async (req, res) => {
   try {
@@ -84,6 +90,29 @@ app.get('/', (req, res) => {
   });
 });
 
+// 404 handler for debugging
+app.use('/api/*', (req, res) => {
+  console.log(`404 - Endpoint not found: ${req.method} ${req.path}`);
+  res.status(404).json({ 
+    error: 'Endpoint not found',
+    method: req.method,
+    path: req.path,
+    available_endpoints: [
+      'GET /api/health',
+      'GET /api/rooms',
+      'POST /api/rooms',
+      'PUT /api/rooms/:id',
+      'DELETE /api/rooms/:id',
+      'PUT /api/rooms/:id/occupancy',
+      'GET /api/connections',
+      'POST /api/connections',
+      'DELETE /api/connections/:id',
+      'GET /api/connections/debug',
+      'POST /api/pathfinding'
+    ]
+  });
+});
+
 // Error handling middleware
 app.use((error, req, res, next) => {
   console.error('Unhandled Error:', error);
@@ -91,11 +120,6 @@ app.use((error, req, res, next) => {
     error: 'Internal Server Error',
     ...(process.env.NODE_ENV === 'development' && { details: error.message, stack: error.stack })
   });
-});
-
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ error: 'Endpoint not found' });
 });
 
 // Start server
@@ -107,3 +131,5 @@ app.listen(port, '0.0.0.0', () => {
   console.log(`🔗 Health Check: http://localhost:${port}/api/health`);
   console.log(`🔗 DB Test: http://localhost:${port}/api/db-test`);
 });
+
+export default app;

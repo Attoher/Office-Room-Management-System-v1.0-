@@ -144,9 +144,6 @@ function App() {
           <div className="w-20 h-20 border-4 border-blue-200 rounded-full animate-spin"></div>
           <div className="w-20 h-20 border-4 border-blue-500 rounded-full animate-ping absolute top-0 left-0"></div>
         </div>
-        <h2 className="text-xl font-semibold text-gray-700 mt-4">Office Room Management</h2>
-        <p className="text-gray-600 mt-2">Menyiapkan sistem...</p>
-        <ConnectionStatus />
       </div>
     </div>
   );
@@ -440,7 +437,7 @@ function App() {
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h2 className="text-2xl font-bold mb-2">Decision Making & Pathfinding</h2>
               <p className="text-gray-600 mb-6">
-                Cek ketersediaan jalur untuk tamu dengan algoritma BFS
+                Cek ketersediaan jalur untuk tamu dengan visualisasi graph interaktif
               </p>
               
               {rooms.length === 0 ? (
@@ -466,45 +463,9 @@ function App() {
                   </button>
                 </div>
               ) : (
-                <PathfindingForm rooms={rooms} />
+                <PathfindingForm rooms={rooms} connections={connections} />
               )}
             </div>
-
-            {/* Graph Visualization */}
-            {connections.length > 0 && rooms.length > 0 && (
-              <div className="bg-white rounded-xl shadow-lg p-6">
-                <h3 className="text-lg font-semibold mb-4">Visualisasi Koneksi Ruangan</h3>
-                <div className="flex flex-wrap gap-6 justify-center p-4">
-                  {rooms.map(room => (
-                    <RoomNode key={room.id} room={room} connections={connections} />
-                  ))}
-                </div>
-              </div>
-            )}
-            {/* Statistics */}
-            {rooms.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white rounded-xl shadow-lg p-6 text-center transform hover:scale-105 transition-transform">
-                  <div className="text-4xl mb-3">🏢</div>
-                  <h3 className="font-semibold text-gray-600">Total Ruangan</h3>
-                  <p className="text-4xl font-bold text-blue-600 mt-2">{rooms.length}</p>
-                </div>
-                
-                <div className="bg-white rounded-xl shadow-lg p-6 text-center transform hover:scale-105 transition-transform">
-                  <div className="text-4xl mb-3">👥</div>
-                  <h3 className="font-semibold text-gray-600">Rata-rata Occupancy</h3>
-                  <p className="text-4xl font-bold text-green-600 mt-2">
-                    {((rooms.reduce((sum, room) => sum + (room.occupancy / room.kapasitas_max), 0) / rooms.length) * 100).toFixed(1)}%
-                  </p>
-                </div>
-                
-                <div className="bg-white rounded-xl shadow-lg p-6 text-center transform hover:scale-105 transition-transform">
-                  <div className="text-4xl mb-3">🔗</div>
-                  <h3 className="font-semibold text-gray-600">Total Koneksi</h3>
-                  <p className="text-4xl font-bold text-purple-600 mt-2">{connections.length}</p>
-                </div>
-              </div>
-            )}
           </div>
         )}
       </main>

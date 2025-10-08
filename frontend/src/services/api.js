@@ -38,7 +38,21 @@ export const connectionsAPI = {
 
 // Pathfinding API
 export const pathfindingAPI = {
-  findPath: (tujuan) => api.post('/pathfinding', { tujuan }),
+  findPath: (asal, tujuan) => {
+    console.log('=== API SERVICE PATHFINDING ===');
+    console.log('Sending request with:', { asal, tujuan });
+    
+    const request = api.post('/pathfinding', { asal, tujuan });
+    
+    // Add response logging
+    request.then(response => {
+      console.log('API Response received in service:', response.data);
+    }).catch(error => {
+      console.error('API Error in service:', error);
+    });
+    
+    return request;
+  },
 };
 
 export default api;
