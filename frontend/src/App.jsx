@@ -168,13 +168,34 @@ function App() {
 
   // Loading component dengan skeleton screen
   const LoadingScreen = () => (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      <div className="text-center">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-blue-200 rounded-full animate-spin"></div>
-          <div className="w-16 h-16 border-4 border-blue-500 rounded-full animate-ping absolute top-0 left-0"></div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        {/* Animated Logo/Icon */}
+        <div className="text-center mb-8">
+          <div className="relative inline-block">
+            <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg mb-4 mx-auto">
+              <div className="text-white text-2xl font-bold">🏢</div>
+            </div>
+            <div className="absolute -inset-2 bg-blue-500 rounded-2xl opacity-20 animate-pulse"></div>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">Office Room Management</h1>
+          <p className="text-gray-600 text-sm">v1.0 - Loading System</p>
         </div>
-        <p className="mt-4 text-gray-600 text-sm">Memuat data...</p>
+
+        {/* Main Loading Animation */}
+        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-gray-200">
+          <div className="flex items-center justify-center mb-6">
+            <div className="relative">
+              <div className="w-16 h-16 border-4 border-blue-200 rounded-full animate-spin"></div>
+              <div className="w-16 h-16 border-4 border-blue-500 rounded-full animate-ping absolute top-0 left-0"></div>
+            </div>
+          </div>
+          
+          <div className="text-center">
+            <p className="text-lg font-semibold text-gray-800 mb-2">Memuat Dashboard</p>
+            <p className="text-gray-600 text-sm mb-4">Menyiapkan sistem manajemen ruangan...</p>
+          </div>
+        </div>
       </div>
     </div>
   );
