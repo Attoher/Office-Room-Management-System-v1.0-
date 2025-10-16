@@ -65,7 +65,14 @@ cd backend
 npm install
 
 # Konfigurasi environment
-cp .env.example .env
+  Backend :
+    DB_URL=postgresql://user:pass@localhost:5432/office_rooms
+    PORT=3000
+    NODE_ENV=development
+
+  Frontend :
+    VITE_API_URL=http://localhost:3000/api
+
 # Edit .env dengan kredensial database Anda
 
 # Jalankan backend
