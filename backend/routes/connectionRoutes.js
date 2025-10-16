@@ -1,10 +1,21 @@
 import express from 'express';
-import { getAllConnections, createConnection, deleteConnection, debugConnections } from '../controllers/connectionController.js';
+import { 
+  getAllConnections, 
+  createConnection, 
+  deleteConnection, 
+  debugConnections,
+  getRoomConnections 
+} from '../controllers/connectionController.js';
 
 const router = express.Router();
 
-// FIXED: Add proper route definitions
-router.get('/debug', debugConnections);  // Put debug route before parameterized routes
+// Debug endpoint - harus di atas parameterized routes
+router.get('/debug', debugConnections);
+
+// Get connections for specific room
+router.get('/room/:roomId', getRoomConnections);
+
+// Standard CRUD operations
 router.get('/', getAllConnections);
 router.post('/', createConnection);
 router.delete('/:id', deleteConnection);

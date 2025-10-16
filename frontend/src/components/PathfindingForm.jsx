@@ -8,54 +8,77 @@ const PathfindingForm = ({ rooms, connections }) => {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState(null);
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    console.log('🔍 Form values:', { asal, tujuan }); // DEBUG
+    
     if (!asal || !tujuan) {
-      alert('Pilih ruangan asal dan tujuan terlebih dahulu');
+      setError('Pilih ruangan asal dan tujuan terlebih dahulu');
       return;
     }
     
     if (asal === tujuan) {
-      alert('Ruangan asal dan tujuan tidak boleh sama');
+      setError('Ruangan asal dan tujuan tidak boleh sama');
       return;
     }
     
     setLoading(true);
     setResult(null);
     setSelectedRoom(null);
-    
-    await new Promise(resolve => setTimeout(resolve, 100));
+    setError('');
     
     try {
-      const response = await pathfindingAPI.findPath(asal, tujuan);
+      // ✅ PERBAIKAN: Cari ID ruangan dari nama yang dipilih
+      const startRoom = rooms.find(room => room.nama_ruangan === asal);
+      const targetRoom = rooms.find(room => room.nama_ruangan === tujuan);
       
-      if (!response.data) {
+      if (!startRoom) {
+        throw new Error(`Ruangan asal "${asal}" tidak ditemukan`);
+      }
+      
+      if (!targetRoom) {
+        throw new Error(`Ruangan tujuan "${tujuan}" tidak ditemukan`);
+      }
+      
+      console.log('🎯 Sending pathfinding request:', {
+        tujuan: targetRoom.nama_ruangan,
+        start: startRoom.id // ✅ Gunakan ID, bukan nama
+      });
+      
+      // ✅ PERBAIKAN: Kirim request dengan parameter yang benar
+      const response = await pathfindingAPI.findPath(tujuan, startRoom.id);
+      
+      console.log('✅ Pathfinding response:', response);
+      
+      // ✅ PERBAIKAN: Handle response data
+      const resultData = response.data || response;
+      
+      if (!resultData) {
         throw new Error('Invalid response from server');
       }
       
-      if (!response.data.jalur_optimal || !Array.isArray(response.data.jalur_optimal)) {
-        throw new Error('Invalid path data from server');
+      if (resultData.status === 'error') {
+        throw new Error(resultData.error || 'Pathfinding failed');
       }
       
-      const freshResult = { ...response.data };
-      setResult(freshResult);
+      setResult(resultData);
       
+      // Auto-select target room for visualization
       setTimeout(() => {
-        const targetRoom = rooms.find(
-          r => r.nama_ruangan.trim().toLowerCase() === response.data.ruangan_tujuan.trim().toLowerCase()
-        );
         if (targetRoom) {
           setSelectedRoom(targetRoom);
         }
       }, 500);
       
     } catch (error) {
-      console.error('Error finding path:', error);
+      console.error('❌ Error finding path:', error);
+      setError(error.message || 'Terjadi kesalahan saat mencari jalur');
       setResult({
         status: 'error',
-        message: error.response?.data?.error || 'Terjadi kesalahan'
+        message: error.message || 'Terjadi kesalahan'
       });
     } finally {
       setLoading(false);
@@ -66,28 +89,54 @@ const PathfindingForm = ({ rooms, connections }) => {
     setSelectedRoom(room);
   };
 
+  // ✅ PERBAIKAN: Filter available rooms dengan benar
   const getAvailableTujuan = () => 
-    rooms.filter(room => room.nama_ruangan.trim().toLowerCase() !== asal.trim().toLowerCase());
+    rooms.filter(room => room.nama_ruangan !== asal);
+  
   const getAvailableAsal = () => 
-    rooms.filter(room => room.nama_ruangan.trim().toLowerCase() !== tujuan.trim().toLowerCase());
+    rooms.filter(room => room.nama_ruangan !== tujuan);
 
   const resetForm = () => {
     setAsal('');
     setTujuan('');
     setResult(null);
     setSelectedRoom(null);
+    setError('');
+  };
+
+  // ✅ PERBAIKAN: Auto-fill form ketika room di-click dari graph
+  const handleRoomSelectFromGraph = (room) => {
+    if (!asal) {
+      setAsal(room.nama_ruangan);
+    } else if (!tujuan) {
+      setTujuan(room.nama_ruangan);
+    } else {
+      // Jika kedua field sudah terisi, ganti tujuan
+      setTujuan(room.nama_ruangan);
+    }
   };
 
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold mb-4">Cek Jalur untuk Tamu</h3>
+        <h3 className="text-2xl font-bold mb-2">🧭 Decision Making & Pathfinding</h3>
+        <p className="text-gray-600 mb-6">
+          Cari jalur optimal untuk tamu dengan algoritma BFS dan analisis occupancy ruangan
+        </p>
         
+        {/* Error Display */}
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4">
+            <strong>Error: </strong>
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Ruangan Asal (Start)
+                🚀 Ruangan Asal (Start)
               </label>
               <select
                 value={asal}
@@ -95,28 +144,33 @@ const PathfindingForm = ({ rooms, connections }) => {
                   setAsal(e.target.value);
                   setResult(null);
                   setSelectedRoom(null);
+                  setError('');
                 }}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                 required
+                disabled={loading}
               >
                 <option value="">Pilih Ruangan Asal</option>
-                {getAvailableAsal().map(room => (
-                  <option key={room.id} value={room.nama_ruangan}>
-                    {room.nama_ruangan} ({room.occupancy}/{room.kapasitas_max})
-                  </option>
-                ))}
+                {getAvailableAsal().map(room => {
+                  const percentage = (room.occupancy / room.kapasitas_max) * 100;
+                  return (
+                    <option key={room.id} value={room.nama_ruangan}>
+                      {room.nama_ruangan} ({room.occupancy}/{room.kapasitas_max} - {percentage.toFixed(1)}%)
+                    </option>
+                  );
+                })}
               </select>
               {asal && (
-                <p className="text-xs text-green-600 mt-1 flex items-center">
-                  <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
-                  Start point: {asal}
+                <p className="text-xs text-green-600 mt-2 flex items-center">
+                  <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                  Start point: <strong className="ml-1">{asal}</strong>
                 </p>
               )}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Ruangan Tujuan (Target)
+                🎯 Ruangan Tujuan (Target)
               </label>
               <select
                 value={tujuan}
@@ -124,21 +178,26 @@ const PathfindingForm = ({ rooms, connections }) => {
                   setTujuan(e.target.value);
                   setResult(null);
                   setSelectedRoom(null);
+                  setError('');
                 }}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                 required
+                disabled={loading}
               >
                 <option value="">Pilih Ruangan Tujuan</option>
-                {getAvailableTujuan().map(room => (
-                  <option key={room.id} value={room.nama_ruangan}>
-                    {room.nama_ruangan} ({room.occupancy}/{room.kapasitas_max})
-                  </option>
-                ))}
+                {getAvailableTujuan().map(room => {
+                  const percentage = (room.occupancy / room.kapasitas_max) * 100;
+                  return (
+                    <option key={room.id} value={room.nama_ruangan}>
+                      {room.nama_ruangan} ({room.occupancy}/{room.kapasitas_max} - {percentage.toFixed(1)}%)
+                    </option>
+                  );
+                })}
               </select>
               {tujuan && (
-                <p className="text-xs text-purple-600 mt-1 flex items-center">
-                  <span className="w-2 h-2 bg-purple-500 rounded-full mr-1"></span>
-                  Target point: {tujuan}
+                <p className="text-xs text-purple-600 mt-2 flex items-center">
+                  <span className="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
+                  Target point: <strong className="ml-1">{tujuan}</strong>
                 </p>
               )}
             </div>
@@ -148,12 +207,12 @@ const PathfindingForm = ({ rooms, connections }) => {
             <button
               type="submit"
               disabled={loading || !asal || !tujuan}
-              className="flex-1 bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 disabled:opacity-50 transition-all font-medium"
+              className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 transition-all font-medium shadow-md"
             >
               {loading ? (
                 <span className="flex items-center justify-center">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Mencari Jalur...
+                  🔍 Mencari Jalur Optimal...
                 </span>
               ) : (
                 <span className="flex items-center justify-center">
@@ -165,182 +224,111 @@ const PathfindingForm = ({ rooms, connections }) => {
             <button
               type="button"
               onClick={resetForm}
-              className="px-4 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+              disabled={loading}
+              className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 transition-colors font-medium"
             >
               🔄 Reset
             </button>
           </div>
 
           {asal && tujuan && (
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-800 font-medium">
-                Rute yang akan dicari:
+            <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800 font-medium mb-2">
+                📍 Rute yang akan dicari:
               </p>
-              <div className="flex items-center mt-1">
-                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm">🚀 {asal}</span>
-                <span className="mx-2 text-blue-400">→</span>
-                <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-sm">🎯 {tujuan}</span>
+              <div className="flex items-center justify-center space-x-4">
+                <div className="text-center">
+                  <div className="px-3 py-2 bg-blue-100 text-blue-800 rounded-lg font-medium text-sm shadow-sm">
+                    🚀 {asal}
+                  </div>
+                </div>
+                <div className="text-2xl text-blue-500 animate-pulse">⟶</div>
+                <div className="text-center">
+                  <div className="px-3 py-2 bg-purple-100 text-purple-800 rounded-lg font-medium text-sm shadow-sm">
+                    🎯 {tujuan}
+                  </div>
+                </div>
               </div>
               
-              {/* Show all possible routes preview */}
-              <div className="mt-2 text-xs text-blue-600">
-                💡 Sistem akan mencari semua kemungkinan rute dan memberikan rekomendasi optimal berdasarkan occupancy dan jarak
+              <div className="mt-3 text-xs text-blue-600 text-center">
+                💡 Sistem akan mencari jalur menggunakan algoritma BFS dengan analisis occupancy
               </div>
             </div>
           )}
         </form>
 
+        {/* Results Section */}
         {result && (
-          <div className={`p-4 rounded-lg border ${
-            result.status === 'aman' ? 'bg-green-50 border-green-200' : 
-            result.status === 'penuh' ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'
-          }`}>
-            <h4 className={`font-semibold mb-2 ${
+          <div className={`p-6 rounded-xl border-2 ${
+            result.status === 'aman' ? 'bg-green-50 border-green-300' : 
+            result.status === 'penuh' ? 'bg-red-50 border-red-300' : 'bg-gray-50 border-gray-300'
+          } transition-all duration-300`}>
+            <h4 className={`text-xl font-bold mb-4 ${
               result.status === 'aman' ? 'text-green-800' : 
               result.status === 'penuh' ? 'text-red-800' : 'text-gray-800'
             }`}>
-              {result.status === 'aman' ? '✅ Jalur Ditemukan' : 
-               result.status === 'penuh' ? '❌ Jalur Terhalang' : '⚠️ Hasil'}
+              {result.status === 'aman' ? '✅ JALUR OPTIMAL DITEMUKAN' : 
+               result.status === 'penuh' ? '❌ JALUR TERHALANG' : '⚠️ HASIL PENCARIAN'}
             </h4>
             
             {result.status === 'aman' && result.jalur_optimal && (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {/* Optimal Path */}
-                <div>
-                  <p className="font-medium text-green-800 mb-2">🏆 Jalur Optimal (Rekomendasi):</p>
-                  <div className="flex items-center flex-wrap gap-1 mb-2">
+                <div className="bg-white p-4 rounded-lg border border-green-200 shadow-sm">
+                  <p className="font-semibold text-green-800 mb-3 text-lg">🏆 JALUR OPTIMAL:</p>
+                  <div className="flex items-center justify-center flex-wrap gap-2 mb-3">
                     {result.jalur_optimal.map((room, index) => (
                       <div key={index} className="flex items-center">
-                        {index > 0 && <span className="mx-1 text-gray-400">→</span>}
-                        <span className={`px-2 py-1 rounded text-sm font-medium ${
-                          index === 0 ? 'bg-blue-100 text-blue-800' :
-                          index === result.jalur_optimal.length - 1 ? 'bg-purple-100 text-purple-800' :
-                          'bg-yellow-100 text-yellow-800'
+                        {index > 0 && (
+                          <span className="mx-2 text-gray-400 text-lg font-bold">→</span>
+                        )}
+                        <span className={`px-3 py-2 rounded-lg text-sm font-bold ${
+                          index === 0 ? 'bg-blue-500 text-white shadow-md' :
+                          index === result.jalur_optimal.length - 1 ? 'bg-purple-500 text-white shadow-md' :
+                          'bg-yellow-500 text-white shadow-md'
                         }`}>
-                          {room}
+                          {index === 0 ? '🚀' : index === result.jalur_optimal.length - 1 ? '🎯' : `📍${index}`}
+                          <span className="ml-2">{room}</span>
                         </span>
                       </div>
                     ))}
                   </div>
-                  <p className="text-sm text-gray-600">
-                    Total {result.jalur_optimal.length - 1} langkah • Occupancy tujuan: {result.occupancy_tujuan}
-                  </p>
-                </div>
-
-                {/* All Possible Routes */}
-                {result.semua_kemungkinan_rute && result.semua_kemungkinan_rute.length > 1 && (
-                  <div className="border-t pt-4">
-                    <p className="font-medium text-gray-800 mb-3">
-                      🗺️ Semua Kemungkinan Rute ({result.semua_kemungkinan_rute.length}):
-                    </p>
-                    <div className="space-y-3 max-h-64 overflow-y-auto">
-                      {result.semua_kemungkinan_rute.map((route, index) => (
-                        <div key={index} className={`p-3 rounded-lg border-2 ${
-                          route.is_optimal 
-                            ? 'bg-green-50 border-green-300' 
-                            : 'bg-gray-50 border-gray-200'
-                        }`}>
-                          <div className="flex justify-between items-start mb-2">
-                            <div className="flex items-center">
-                              <span className={`px-2 py-1 rounded text-xs font-bold mr-2 ${
-                                route.is_optimal 
-                                  ? 'bg-green-500 text-white' 
-                                  : 'bg-gray-400 text-white'
-                              }`}>
-                                {route.is_optimal ? '🏆 OPTIMAL' : `Opsi ${index + 1}`}
-                              </span>
-                              <span className="text-sm font-medium">
-                                {route.langkah} langkah
-                              </span>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-xs text-gray-600">Efisiensi vs Optimal:</div>
-                              <div className={`text-sm font-bold ${
-                                parseFloat(route.perbandingan_dengan_optimal) >= 90 
-                                  ? 'text-green-600' 
-                                  : parseFloat(route.perbandingan_dengan_optimal) >= 70
-                                  ? 'text-yellow-600'
-                                  : 'text-red-600'
-                              }`}>
-                                {route.perbandingan_dengan_optimal}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center flex-wrap gap-1 mb-2">
-                            {route.rute.map((room, roomIndex) => (
-                              <div key={roomIndex} className="flex items-center">
-                                {roomIndex > 0 && <span className="mx-1 text-gray-400 text-xs">→</span>}
-                                <span className={`px-2 py-1 rounded text-xs ${
-                                  roomIndex === 0 ? 'bg-blue-100 text-blue-700' :
-                                  roomIndex === route.rute.length - 1 ? 'bg-purple-100 text-purple-700' :
-                                  'bg-gray-100 text-gray-700'
-                                }`}>
-                                  {room}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                          
-                          <div className="flex justify-between text-xs text-gray-600">
-                            <span>Avg Occupancy: {route.avg_occupancy}</span>
-                            <span>Score: {route.efisiensi_score}/100</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    
-                    <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
-                      <strong>💡 Penjelasan:</strong> Jalur optimal dipilih berdasarkan kombinasi jarak terpendek (40%) 
-                      dan tingkat occupancy terendah (60%). Semakin tinggi score efisiensi, semakin baik rute tersebut.
-                    </div>
+                  <div className="flex justify-between items-center text-sm text-gray-600">
+                    <span>📏 Total {result.jalur_optimal.length - 1} langkah</span>
+                    <span>👥 Occupancy tujuan: {result.occupancy_tujuan || 'N/A'}</span>
                   </div>
-                )}
+                </div>
               </div>
             )}
             
             {result.status === 'penuh' && result.ruangan_penuh && (
-              <div className="space-y-3">
-                <div>
-                  <p className="font-medium">Ruangan Penuh di Jalur:</p>
-                  <div className="flex flex-wrap gap-2 mt-1">
+              <div className="space-y-4">
+                <div className="bg-red-100 p-4 rounded-lg border border-red-300">
+                  <p className="font-semibold text-red-800 mb-3">🚫 RUANGAN PENUH DI JALUR:</p>
+                  <div className="flex flex-wrap gap-2">
                     {result.ruangan_penuh.map((room, index) => (
-                      <span key={index} className="bg-red-100 text-red-800 px-2 py-1 rounded text-sm">
-                        {room} ({result.occupancy[index]})
+                      <span key={index} className="bg-red-200 text-red-800 px-3 py-2 rounded-lg text-sm font-medium border border-red-300">
+                        ❌ {room} ({result.occupancy?.[index] || '100%'})
                       </span>
                     ))}
                   </div>
                 </div>
-                
-                {/* Show alternative routes even when blocked */}
-                {result.semua_kemungkinan_rute && result.semua_kemungkinan_rute.length > 0 && (
-                  <div className="border-t pt-3">
-                    <p className="font-medium text-gray-700 mb-2">
-                      🔄 Rute Alternatif (Tunggu sampai ruangan kosong):
-                    </p>
-                    <div className="space-y-2 max-h-32 overflow-y-auto">
-                      {result.semua_kemungkinan_rute.slice(0, 3).map((route, index) => (
-                        <div key={index} className="text-sm text-gray-600">
-                          <span className="font-medium">Opsi {index + 1}:</span> {route.rute.join(' → ')} 
-                          <span className="text-xs ml-2">({route.langkah} langkah)</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>
         )}
 
-        <GraphVisualization
-          rooms={rooms}
-          connections={connections}
-          pathResult={result}
-          startRoom={asal}
-          targetRoom={tujuan}
-          onNodeClick={handleNodeClick}
-        />
+        {/* Graph Visualization */}
+        <div className="mt-8">
+          <GraphVisualization
+            rooms={rooms}
+            connections={connections}
+            pathResult={result}
+            startRoom={asal}
+            targetRoom={tujuan}
+            onNodeClick={handleRoomSelectFromGraph} // ✅ PERBAIKAN: Gunakan handler baru
+          />
+        </div>
       </div>
     </div>
   );

@@ -5,7 +5,7 @@ import ConnectionForm from './components/ConnectionForm';
 import ConnectionList from './components/ConnectionList';
 import PathfindingForm from './components/PathfindingForm';
 import RoomEditModal from './components/RoomEditModal';
-import { roomsAPI, connectionsAPI } from './services/api';
+import { roomsAPI, connectionsAPI, apiUtils } from './services/api';
 
 function App() {
   const [activeTab, setActiveTab] = useState('monitoring');
@@ -17,25 +17,28 @@ function App() {
   const [editingRoom, setEditingRoom] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  // Test koneksi backend
+  // Test koneksi backend - FIXED
   const testBackendConnection = async () => {
     try {
       setConnectionStatus('checking');
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
       
-      const response = await fetch(`${apiUrl}/health`);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      // ✅ GUNAKAN apiUtils dari service kita
+      const connection = await apiUtils.checkConnection();
       
-      const data = await response.json();
-      setConnectionStatus('connected');
-      return true;
+      if (connection.connected) {
+        setConnectionStatus('connected');
+        return true;
+      } else {
+        setConnectionStatus('failed');
+        return false;
+      }
     } catch (error) {
       setConnectionStatus('failed');
       return false;
     }
   };
 
-  // Fetch data dengan better loading handling
+  // Fetch data dengan better loading handling - FIXED
   const fetchData = async (retryCount = 0) => {
     try {
       setError('');
@@ -46,18 +49,24 @@ function App() {
         throw new Error('Tidak dapat terhubung ke server backend');
       }
 
+      // ✅ PERBAIKAN: Handle response structure yang benar
       const [roomsResponse, connectionsResponse] = await Promise.all([
         roomsAPI.getAll(),
         connectionsAPI.getAll()
       ]);
       
-      setRooms(roomsResponse.data);
-      setConnections(connectionsResponse.data);
+      // ✅ PERBAIKAN: Extract data dari response dengan safety check
+      const roomsData = roomsResponse.data?.data || roomsResponse.data || [];
+      const connectionsData = connectionsResponse.data?.data || connectionsResponse.data || [];
+      
+      setRooms(Array.isArray(roomsData) ? roomsData : []);
+      setConnections(Array.isArray(connectionsData) ? connectionsData : []);
       
     } catch (error) {
       console.error('Error fetching data:', error);
       
       if (retryCount < 2) {
+        console.log(`Retrying... attempt ${retryCount + 1}`);
         setTimeout(() => fetchData(retryCount + 1), 1000);
         return;
       }
@@ -108,6 +117,25 @@ function App() {
     fetchData();
   };
 
+  // ✅ PERBAIKAN: Reset all occupancies dengan proper handling
+  const handleResetAll = async () => {
+    if (window.confirm('Reset semua occupancy ke 0?')) {
+      try {
+        setLoading(true);
+        const resetPromises = rooms.map(room => 
+          roomsAPI.updateOccupancy(room.id, 0)
+        );
+        await Promise.all(resetPromises);
+        await fetchData(); // Tunggu sampai fetchData selesai
+      } catch (error) {
+        console.error('Error resetting rooms:', error);
+        alert('Gagal mereset beberapa ruangan');
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
   // Tab configuration
   const tabs = [
     { id: 'monitoring', name: 'Monitoring Ruangan', icon: '📊' },
@@ -144,6 +172,7 @@ function App() {
           <div className="w-20 h-20 border-4 border-blue-200 rounded-full animate-spin"></div>
           <div className="w-20 h-20 border-4 border-blue-500 rounded-full animate-ping absolute top-0 left-0"></div>
         </div>
+        <p className="mt-4 text-gray-600">Memuat data...</p>
       </div>
     </div>
   );
@@ -208,7 +237,7 @@ function App() {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         {/* Monitoring Tab */}
-          {activeTab === 'monitoring' && (
+        {activeTab === 'monitoring' && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
               {/* Main Monitoring Content - 3/4 width */}
@@ -349,20 +378,9 @@ function App() {
                       <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-4 border border-orange-200">
                         <h4 className="font-semibold text-orange-800 mb-3">Quick Actions</h4>
                         <div className="space-y-2">
+                          {/* ✅ PERBAIKAN: Gunakan handleResetAll yang sudah diperbaiki */}
                           <button 
-                            onClick={() => {
-                              // Reset all occupancies to 0
-                              if (window.confirm('Reset semua occupancy ke 0?')) {
-                                rooms.forEach(async room => {
-                                  try {
-                                    await roomsAPI.updateOccupancy(room.id, 0);
-                                  } catch (error) {
-                                    console.error('Error resetting room:', error);
-                                  }
-                                });
-                                setTimeout(fetchData, 500);
-                              }
-                            }}
+                            onClick={handleResetAll}
                             className="w-full bg-orange-500 text-white py-2 rounded text-sm hover:bg-orange-600 transition-colors"
                           >
                             Reset All to 0
@@ -530,34 +548,6 @@ const RoomItem = ({ room, onEdit, onDelete }) => {
         >
           🗑️ Hapus
         </button>
-      </div>
-    </div>
-  );
-};
-
-// Room Node Component untuk visualisasi
-const RoomNode = ({ room, connections }) => {
-  const roomConnections = connections.filter(
-    conn => conn.room_from === room.id || conn.room_to === room.id
-  );
-  const percentage = (room.occupancy / room.kapasitas_max) * 100;
-  
-  let statusColor = 'bg-green-500';
-  if (percentage >= 90) statusColor = 'bg-red-500';
-  else if (percentage >= 70) statusColor = 'bg-yellow-500';
-  
-  return (
-    <div className="text-center group relative">
-      <div 
-        className={`w-20 h-20 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg transition-all group-hover:scale-110 ${statusColor}`}
-        title={`${room.nama_ruangan} - ${percentage.toFixed(1)}% occupied`}
-      >
-        {room.nama_ruangan.split(' ').map(word => word[0]).join('').toUpperCase()}
-      </div>
-      <p className="text-sm font-medium mt-2 max-w-[100px] truncate">{room.nama_ruangan}</p>
-      <p className="text-xs text-gray-500">{room.occupancy}/{room.kapasitas_max}</p>
-      <div className="absolute -top-2 -right-2 bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
-        {roomConnections.length}
       </div>
     </div>
   );

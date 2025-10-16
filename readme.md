@@ -6,6 +6,24 @@ Sistem manajemen ruangan kantor cerdas dengan fitur monitoring occupancy real-ti
 ![React](https://img.shields.io/badge/React-18.2.0-61DAFB.svg)
 ![Node.js](https://img.shields.io/badge/Node.js-16+-339933.svg)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-12+-336791.svg)
+![Express.js](https://img.shields.io/badge/Express.js-4.18+-000000.svg)
+
+## 🚀 What's New in v1.0
+
+### 🎯 Enhanced Architecture
+- **Controller-based Architecture** - Better separation of concerns
+- **Standardized API Responses** - Consistent response format across all endpoints
+- **Enhanced Error Handling** - Comprehensive error management with detailed logging
+
+### 🔧 Technical Improvements
+- **Modular Route Management** - Organized route structure with dedicated route files
+- **Advanced Pathfinding Algorithm** - Multiple route analysis with efficiency scoring
+- **Real-time Capacity Monitoring** - Smart occupancy tracking with color-coded status
+
+### 🎨 UI/UX Enhancements
+- **Interactive Graph Visualization** - Drag-and-drop room network with path highlighting
+- **Responsive Dashboard** - Mobile-friendly interface with comprehensive statistics
+- **Smart Decision Making** - Route optimization based on occupancy and distance
 
 ## 🌟 Fitur Utama
 
@@ -22,15 +40,50 @@ Sistem manajemen ruangan kantor cerdas dengan fitur monitoring occupancy real-ti
 
 ### 🗺️ Graph & Pathfinding
 - **Koneksi Antar Ruangan**: Buat hubungan seperti graph
-- **Algoritma BFS**: Cari jalur optimal menuju ruangan tujuan
-- **Smart Decision Making**: Cek kapasitas sepanjang jalur
-- **Visualisasi Graph**: Tampilan visual koneksi ruangan
+- **Algoritma BFS Enhanced**: Cari semua kemungkinan jalur dengan efisiensi scoring
+- **Smart Decision Making**: Analisis kapasitas sepanjang jalur
+- **Visualisasi Graph Interaktif**: Tampilan visual koneksi ruangan dengan drag & drop
 
 ### 🎨 Modern UI/UX
 - **Responsive Design**: Optimal di desktop, tablet, dan mobile
 - **Tailwind CSS**: Design system yang konsisten
 - **Loading Animation**: Pengalaman loading yang smooth
 - **Error Handling**: Notifikasi error yang informatif
+
+## 🏗️ System Architecture
+
+```
+office-room-management/
+├── 📂 frontend/                 # React.js Application
+│   ├── 📂 src/
+│   │   ├── 📂 components/       # React components
+│   │   │   ├── RoomForm.jsx
+│   │   │   ├── RoomList.jsx
+│   │   │   ├── ConnectionForm.jsx
+│   │   │   ├── ConnectionList.jsx
+│   │   │   ├── PathfindingForm.jsx
+│   │   │   ├── GraphVisualization.jsx
+│   │   │   └── RoomEditModal.jsx
+│   │   ├── 📂 services/         # API services
+│   │   │   └── api.js
+│   │   └── 📄 App.jsx
+│   └── 📄 package.json
+├── 📂 backend/                  # Express.js API Server
+│   ├── 📂 controllers/          # Business logic
+│   │   ├── roomController.js
+│   │   ├── connectionController.js
+│   │   └── pathfindingController.js
+│   ├── 📂 routes/               # API endpoints
+│   │   ├── roomRoutes.js
+│   │   ├── connectionRoutes.js
+│   │   └── pathfindingRoutes.js
+│   ├── 📄 server.js             # Main server file
+│   └── 📄 package.json
+├── 📂 database/                 # Database scripts
+│   ├── 📄 schema.sql            # Database schema
+│   └── 📄 sample_data.sql       # Sample data
+└── 📄 README.md
+```
 
 ## 🚀 Quick Start
 
@@ -65,14 +118,7 @@ cd backend
 npm install
 
 # Konfigurasi environment
-  Backend :
-    DB_URL=postgresql://user:pass@localhost:5432/office_rooms
-    PORT=3000
-    NODE_ENV=development
-
-  Frontend :
-    VITE_API_URL=http://localhost:3000/api
-
+cp .env.example .env
 # Edit .env dengan kredensial database Anda
 
 # Jalankan backend
@@ -90,45 +136,6 @@ npm run dev
 - Frontend: http://localhost:5173
 - Backend API: http://localhost:3000
 
-## 📁 Struktur Project
-
-```
-office-room-management/
-├── 📂 backend/                 # Express.js API Server
-│   ├── 📂 controllers/         # Business logic
-│   ├── 📂 routes/             # API endpoints
-│   ├── 📄 server.js           # Main server file
-│   └── 📄 package.json
-├── 📂 frontend/               # React.js Application
-│   ├── 📂 src/
-│   │   ├── 📂 components/     # React components
-│   │   ├── 📂 services/       # API services
-│   │   └── 📄 App.jsx         # Main component
-│   └── 📄 package.json
-├── 📂 database/               # Database scripts
-│   ├── 📄 schema.sql          # Database schema
-│   └── 📄 sample_data.sql     # Sample data
-└── 📄 README.md
-```
-
-## 🛠️ Tech Stack
-
-### Frontend
-- **React.js 18** - UI Library
-- **Vite** - Build tool & dev server
-- **Tailwind CSS** - Styling framework
-- **Axios** - HTTP client
-
-### Backend
-- **Node.js** - Runtime environment
-- **Express.js** - Web framework
-- **PostgreSQL** - Database
-- **pg** - PostgreSQL client
-
-### Development Tools
-- **Postman** - API testing
-- **pgAdmin** - Database management
-
 ## 📡 API Documentation
 
 ### Base URL
@@ -142,8 +149,9 @@ http://localhost:3000/api
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/rooms` | Get all rooms |
-| `POST` | `/rooms` | Create new room |
+| `GET` | `/rooms/stats` | Get room statistics |
 | `GET` | `/rooms/:id` | Get room by ID |
+| `POST` | `/rooms` | Create new room |
 | `PUT` | `/rooms/:id` | Update room |
 | `DELETE` | `/rooms/:id` | Delete room |
 | `PUT` | `/rooms/:id/occupancy` | Update occupancy |
@@ -152,22 +160,35 @@ http://localhost:3000/api
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/connections` | Get all connections |
+| `GET` | `/connections/debug` | Debug connections data |
+| `GET` | `/connections/room/:roomId` | Get connections for specific room |
 | `POST` | `/connections` | Create connection |
 | `DELETE` | `/connections/:id` | Delete connection |
 
-#### 🧭 Pathfinding
+#### 🧭 Pathfinding & Analysis
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/pathfinding` | Find optimal path |
+| `POST` | `/pathfinding` | Find optimal path with efficiency analysis |
+| `GET` | `/pathfinding/health` | Pathfinding service health check |
+| `GET` | `/pathfinding/graph` | Get graph structure for visualization |
+| `POST` | `/pathfinding/legacy` | Legacy pathfinding endpoint |
 
-### Example Usage
+#### 🔧 System Health
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | API health check |
+| `GET` | `/db-test` | Database connection test |
+| `GET` | `/` | API documentation |
+
+### Example API Usage
 
 ```javascript
 // Create room
 const roomData = {
   nama_ruangan: "Meeting Room A",
   luas: 30.5,
-  kapasitas_max: 15
+  kapasitas_max: 15,
+  occupancy: 0
 };
 
 // Update occupancy
@@ -175,9 +196,16 @@ const occupancyData = {
   occupancy: 10
 };
 
+// Create connection
+const connectionData = {
+  room_from: 1,
+  room_to: 2
+};
+
 // Pathfinding request
 const pathfindingData = {
-  tujuan: "Meeting Room A"
+  tujuan: "Meeting Room A",
+  start: 1
 };
 ```
 
@@ -190,48 +218,46 @@ const pathfindingData = {
 
 ### 2. Buat Koneksi
 1. Di tab **"Manajemen Data"**, pilih "Manajemen Koneksi"
-2. Pilih ruangan asal dan tujuan
-3. Klik "Tambah Koneksi"
+2. Pilih 2 ruangan untuk dihubungkan
+3. Klik "Buat Koneksi"
 
 ### 3. Monitoring Real-time
 1. Buka tab **"Monitoring Ruangan"**
 2. Pantau status warna setiap ruangan
-3. Gunakan dropdown untuk ubah occupancy
+3. Gunakan dropdown atau tombol +/- untuk ubah occupancy
 
 ### 4. Cek Jalur Tamu
 1. Buka tab **"Cek Jalur Tamu"**
-2. Pilih ruangan tujuan
-3. Sistem akan tampilkan jalur optimal dan status kapasitas
+2. Pilih ruangan asal dan tujuan
+3. Sistem akan tampilkan jalur optimal dan analisis efisiensi
 
-## 🎨 UI Components
+## 🔧 Advanced Features
 
-### Room Card
-```jsx
-<RoomCard 
-  room={room}
-  onEdit={handleEdit}
-  onDelete={handleDelete}
-  onUpdateOccupancy={handleUpdate}
-/>
-```
+### Pathfinding Algorithm
+Sistem menggunakan enhanced BFS algorithm dengan:
+- **Multiple Route Discovery**: Menemukan semua kemungkinan rute
+- **Efficiency Scoring**: Skor berdasarkan panjang rute (40%) dan occupancy (60%)
+- **Capacity Analysis**: Deteksi ruangan penuh di sepanjang jalur
+- **Route Comparison**: Perbandingan semua rute dengan yang optimal
 
-### Status Indicator
-- 🟢 **Hijau**: Occupancy < 70% - Aman
-- 🟡 **Kuning**: Occupancy 70-90% - Hati-hati  
-- 🔴 **Merah**: Occupancy ≥ 90% - Penuh
+### Graph Visualization
+- **Interactive Nodes**: Klik, drag, dan zoom nodes
+- **Path Highlighting**: Jalur optimal ditandai dengan warna kuning
+- **Room Status**: Warna node berdasarkan occupancy rate
+- **Tooltip Information**: Detail ruangan pada hover
 
-### Statistics Dashboard
-- Total ruangan aktif
-- Rata-rata occupancy
-- Jumlah koneksi
-- Breakdown status ruangan
+### Real-time Statistics
+- Total ruangan aktif dan average occupancy
+- Status breakdown (hijau, kuning, merah)
+- Total koneksi dan graph connectivity
 
-## 🔧 Configuration
+## 🛠️ Configuration
 
 ### Environment Variables
 
 **Backend (.env)**
 ```env
+DATABASE_URL=postgresql://username:password@localhost:5432/office_rooms
 DB_URL=postgresql://username:password@localhost:5432/office_rooms
 PORT=3000
 NODE_ENV=development
@@ -250,13 +276,16 @@ CREATE TABLE rooms (
     nama_ruangan VARCHAR(100) NOT NULL UNIQUE,
     luas DECIMAL(10,2) NOT NULL,
     kapasitas_max INTEGER NOT NULL,
-    occupancy INTEGER DEFAULT 0
+    occupancy INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE connections (
     id SERIAL PRIMARY KEY,
     room_from INTEGER REFERENCES rooms(id),
-    room_to INTEGER REFERENCES rooms(id)
+    room_to INTEGER REFERENCES rooms(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
@@ -274,10 +303,17 @@ cd backend
 npm start
 ```
 
+### Environment Setup for Production
+```env
+NODE_ENV=production
+DATABASE_URL=your_production_database_url
+PORT=3000
+```
+
 ### Docker (Optional)
 
 ```dockerfile
-# Dockerfile example
+# Backend Dockerfile
 FROM node:16-alpine
 WORKDIR /app
 COPY package*.json ./
@@ -297,38 +333,36 @@ CMD ["npm", "start"]
    psql -U postgres -h localhost -p 5432 -d office_rooms
    ```
 
-2. **Port Already in Use**
-   ```bash
-   # Find process using port 3000
-   lsof -i :3000
-   # Kill process
-   kill -9 <PID>
-   ```
-
-3. **CORS Errors**
-   - Pastikan backend CORS configuration benar
+2. **CORS Errors**
+   - Pastikan frontend URL ada di allowedOrigins di server.js
    - Check environment variables
 
-4. **Frontend-Backend Connection**
+3. **Frontend-Backend Connection**
    ```bash
    # Test backend health
    curl http://localhost:3000/api/health
    ```
+
+4. **Pathfinding Not Working**
+   - Pastikan ada koneksi antara ruangan
+   - Check console untuk debug information
+   - Verifikasi nama ruangan match
 
 ### Debug Mode
 
 Aktifkan debug mode dengan environment variable:
 ```env
 NODE_ENV=development
-DEBUG=app:*
 ```
 
 ## 📝 Changelog
 
 ### v1.0.0
-- ✅ CRUD operations untuk ruangan
-- ✅ Graph connections management
-- ✅ Real-time occupancy monitoring
-- ✅ BFS pathfinding algorithm
-- ✅ Responsive React.js frontend
-- ✅ RESTful API dengan Express.js
+- ✅ **Enhanced Controller Architecture** - Better code organization
+- ✅ **Advanced Pathfinding Algorithm** - Multiple route analysis with efficiency scoring
+- ✅ **Interactive Graph Visualization** - Drag-and-drop network visualization
+- ✅ **Standardized API Responses** - Consistent response format
+- ✅ **Comprehensive Error Handling** - Enhanced error management
+- ✅ **Real-time Statistics Dashboard** - Advanced monitoring features
+- ✅ **Responsive UI/UX** - Mobile-friendly interface
+- ✅ **Production Ready** - Optimized for deployment

@@ -3,6 +3,11 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import pkg from 'pg';
 
+// Import routes
+import roomRoutes from './routes/roomRoutes.js';
+import connectionRoutes from './routes/connectionRoutes.js';
+import pathfindingRoutes from './routes/pathfindingRoutes.js';
+
 dotenv.config();
 
 const { Pool } = pkg;
@@ -77,6 +82,15 @@ app.use((req, res, next) => {
   next();
 });
 
+// ==================== ROUTES REGISTRATION ====================
+
+// Register routes
+app.use('/api/rooms', roomRoutes);
+app.use('/api/connections', connectionRoutes);
+app.use('/api/pathfinding', pathfindingRoutes);
+
+// ==================== CORE API ENDPOINTS ====================
+
 // Database connection test endpoint
 app.get('/api/db-test', async (req, res) => {
   try {
@@ -116,7 +130,12 @@ app.get('/api/health', async (req, res) => {
     service: 'Office Room Management API',
     version: '1.0.0',
     environment: process.env.NODE_ENV || 'development',
-    database: 'checking...'
+    database: 'checking...',
+    routes: {
+      rooms: 'registered',
+      connections: 'registered',
+      pathfinding: 'registered'
+    }
   };
 
   try {
@@ -135,343 +154,71 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Routes untuk Rooms
-app.get('/api/rooms', async (req, res) => {
-  try {
-    const result = await pool.query(
-      'SELECT * FROM rooms ORDER BY id'
-    );
-    res.json({
-      status: 'success',
-      data: result.rows,
-      count: result.rowCount
-    });
-  } catch (error) {
-    console.error('Error fetching rooms:', error);
-    res.status(500).json({
-      status: 'error',
-      error: 'Failed to fetch rooms',
-      details: error.message
-    });
-  }
-});
+// ==================== ENHANCED PATHFINDING ALGORITHM ====================
 
-app.get('/api/rooms/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await pool.query(
-      'SELECT * FROM rooms WHERE id = $1',
-      [id]
-    );
+/**
+ * Enhanced BFS untuk mencari semua kemungkinan rute
+ */
+const findAllPaths = (graph, startId, targetId, maxPaths = 10) => {
+  const queue = [{ id: startId, path: [startId], visited: new Set([startId]) }];
+  const allPaths = [];
+  
+  while (queue.length > 0 && allPaths.length < maxPaths) {
+    const { id, path, visited } = queue.shift();
     
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        status: 'error',
-        error: 'Room not found'
-      });
+    if (id === targetId) {
+      allPaths.push(path);
+      continue;
     }
     
-    res.json({
-      status: 'success',
-      data: result.rows[0]
-    });
-  } catch (error) {
-    console.error('Error fetching room:', error);
-    res.status(500).json({
-      status: 'error',
-      error: 'Failed to fetch room',
-      details: error.message
-    });
-  }
-});
-
-app.post('/api/rooms', async (req, res) => {
-  try {
-    const { nama_ruangan, luas, kapasitas_max, occupancy = 0 } = req.body;
-    
-    // Validation
-    if (!nama_ruangan || !luas || !kapasitas_max) {
-      return res.status(400).json({
-        status: 'error',
-        error: 'Missing required fields: nama_ruangan, luas, kapasitas_max'
-      });
-    }
-    
-    const result = await pool.query(
-      `INSERT INTO rooms (nama_ruangan, luas, kapasitas_max, occupancy) 
-       VALUES ($1, $2, $3, $4) 
-       RETURNING *`,
-      [nama_ruangan, parseFloat(luas), parseInt(kapasitas_max), parseInt(occupancy)]
-    );
-    
-    res.status(201).json({
-      status: 'success',
-      message: 'Room created successfully',
-      data: result.rows[0]
-    });
-  } catch (error) {
-    console.error('Error creating room:', error);
-    
-    if (error.code === '23505') { // Unique violation
-      return res.status(400).json({
-        status: 'error',
-        error: 'Room name already exists'
-      });
-    }
-    
-    res.status(500).json({
-      status: 'error',
-      error: 'Failed to create room',
-      details: error.message
-    });
-  }
-});
-
-app.put('/api/rooms/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { nama_ruangan, luas, kapasitas_max, occupancy } = req.body;
-    
-    const result = await pool.query(
-      `UPDATE rooms 
-       SET nama_ruangan = $1, luas = $2, kapasitas_max = $3, occupancy = $4 
-       WHERE id = $5 
-       RETURNING *`,
-      [nama_ruangan, parseFloat(luas), parseInt(kapasitas_max), parseInt(occupancy), id]
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        status: 'error',
-        error: 'Room not found'
-      });
-    }
-    
-    res.json({
-      status: 'success',
-      message: 'Room updated successfully',
-      data: result.rows[0]
-    });
-  } catch (error) {
-    console.error('Error updating room:', error);
-    res.status(500).json({
-      status: 'error',
-      error: 'Failed to update room',
-      details: error.message
-    });
-  }
-});
-
-app.delete('/api/rooms/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    // Hapus koneksi yang terkait terlebih dahulu
-    await pool.query(
-      'DELETE FROM connections WHERE room_from = $1 OR room_to = $1',
-      [id]
-    );
-    
-    const result = await pool.query(
-      'DELETE FROM rooms WHERE id = $1 RETURNING *',
-      [id]
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        status: 'error',
-        error: 'Room not found'
-      });
-    }
-    
-    res.json({
-      status: 'success',
-      message: 'Room deleted successfully',
-      data: result.rows[0]
-    });
-  } catch (error) {
-    console.error('Error deleting room:', error);
-    res.status(500).json({
-      status: 'error',
-      error: 'Failed to delete room',
-      details: error.message
-    });
-  }
-});
-
-app.put('/api/rooms/:id/occupancy', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { occupancy } = req.body;
-    
-    if (occupancy === undefined || occupancy === null) {
-      return res.status(400).json({
-        status: 'error',
-        error: 'Occupancy value is required'
-      });
-    }
-    
-    const result = await pool.query(
-      'UPDATE rooms SET occupancy = $1 WHERE id = $2 RETURNING *',
-      [parseInt(occupancy), id]
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        status: 'error',
-        error: 'Room not found'
-      });
-    }
-    
-    res.json({
-      status: 'success',
-      message: 'Occupancy updated successfully',
-      data: result.rows[0]
-    });
-  } catch (error) {
-    console.error('Error updating occupancy:', error);
-    res.status(500).json({
-      status: 'error',
-      error: 'Failed to update occupancy',
-      details: error.message
-    });
-  }
-});
-
-// Routes untuk Connections
-app.get('/api/connections', async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT c.*, 
-             r1.nama_ruangan as from_name,
-             r2.nama_ruangan as to_name
-      FROM connections c
-      JOIN rooms r1 ON c.room_from = r1.id
-      JOIN rooms r2 ON c.room_to = r2.id
-      ORDER BY c.id
-    `);
-    
-    res.json({
-      status: 'success',
-      data: result.rows,
-      count: result.rowCount
-    });
-  } catch (error) {
-    console.error('Error fetching connections:', error);
-    res.status(500).json({
-      status: 'error',
-      error: 'Failed to fetch connections',
-      details: error.message
-    });
-  }
-});
-
-app.post('/api/connections', async (req, res) => {
-  try {
-    const { room_from, room_to } = req.body;
-    
-    if (!room_from || !room_to) {
-      return res.status(400).json({
-        status: 'error',
-        error: 'Missing required fields: room_from, room_to'
-      });
-    }
-    
-    // Cek jika koneksi sudah ada
-    const existing = await pool.query(
-      'SELECT * FROM connections WHERE room_from = $1 AND room_to = $2',
-      [room_from, room_to]
-    );
-    
-    if (existing.rows.length > 0) {
-      return res.status(400).json({
-        status: 'error',
-        error: 'Connection already exists'
-      });
-    }
-    
-    const result = await pool.query(
-      `INSERT INTO connections (room_from, room_to) 
-       VALUES ($1, $2) 
-       RETURNING *`,
-      [parseInt(room_from), parseInt(room_to)]
-    );
-    
-    res.status(201).json({
-      status: 'success',
-      message: 'Connection created successfully',
-      data: result.rows[0]
-    });
-  } catch (error) {
-    console.error('Error creating connection:', error);
-    res.status(500).json({
-      status: 'error',
-      error: 'Failed to create connection',
-      details: error.message
-    });
-  }
-});
-
-app.delete('/api/connections/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    const result = await pool.query(
-      'DELETE FROM connections WHERE id = $1 RETURNING *',
-      [id]
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        status: 'error',
-        error: 'Connection not found'
-      });
-    }
-    
-    res.json({
-      status: 'success',
-      message: 'Connection deleted successfully',
-      data: result.rows[0]
-    });
-  } catch (error) {
-    console.error('Error deleting connection:', error);
-    res.status(500).json({
-      status: 'error',
-      error: 'Failed to delete connection',
-      details: error.message
-    });
-  }
-});
-
-// Debug endpoint untuk connections
-app.get('/api/connections/debug', async (req, res) => {
-  try {
-    const rooms = await pool.query('SELECT * FROM rooms ORDER BY id');
-    const connections = await pool.query('SELECT * FROM connections ORDER BY id');
-    
-    res.json({
-      status: 'success',
-      rooms: rooms.rows,
-      connections: connections.rows,
-      summary: {
-        total_rooms: rooms.rowCount,
-        total_connections: connections.rowCount
+    for (const neighbor of graph[id] || []) {
+      if (!visited.has(neighbor)) {
+        const newVisited = new Set(visited);
+        newVisited.add(neighbor);
+        queue.push({ 
+          id: neighbor, 
+          path: [...path, neighbor], 
+          visited: newVisited 
+        });
       }
-    });
-  } catch (error) {
-    console.error('Error in connections debug:', error);
-    res.status(500).json({
-      status: 'error',
-      error: 'Debug endpoint failed',
-      details: error.message
-    });
+    }
   }
-});
+  
+  return allPaths;
+};
 
-// Routes untuk Pathfinding
-app.post('/api/pathfinding', async (req, res) => {
+/**
+ * Hitung skor efisiensi untuk sebuah rute
+ */
+const calculateRouteEfficiency = (path, rooms) => {
+  const roomData = path.map(id => rooms.find(r => r.id === id));
+  
+  // Hitung average occupancy rate (lower is better)
+  const avgOccupancy = roomData.reduce((sum, room) => {
+    return sum + (room.occupancy / room.kapasitas_max);
+  }, 0) / roomData.length;
+  
+  // Skor berdasarkan panjang rute (shorter is better) dan occupancy (lower is better)
+  const lengthScore = Math.max(0, 1 - (path.length - 1) * 0.1); // -10% per step
+  const occupancyScore = 1 - avgOccupancy; // Lower occupancy = higher score
+  
+  // Weighted score: 40% length, 60% occupancy
+  const efficiencyScore = (lengthScore * 0.4 + occupancyScore * 0.6) * 100;
+  
+  return {
+    efficiency_score: Math.round(efficiencyScore),
+    avg_occupancy: (avgOccupancy * 100).toFixed(1) + '%',
+    length: path.length - 1
+  };
+};
+
+// ==================== LEGACY PATHFINDING ENDPOINT (FOR COMPATIBILITY) ====================
+
+app.post('/api/pathfinding/legacy', async (req, res) => {
   try {
     const { tujuan, start = 1 } = req.body;
+    
+    console.log('🚀 Legacy Pathfinding request:', { tujuan, start });
     
     if (!tujuan) {
       return res.status(400).json({
@@ -487,17 +234,29 @@ app.post('/api/pathfinding', async (req, res) => {
     const rooms = roomsResult.rows;
     const connections = connectionsResult.rows;
     
-    // Cari ruangan tujuan berdasarkan nama
+    console.log(`📊 Loaded ${rooms.length} rooms and ${connections.length} connections`);
+    
+    // Cari ruangan asal dan tujuan
+    const startRoom = rooms.find(room => room.id === parseInt(start));
     const targetRoom = rooms.find(room => 
       room.nama_ruangan.toLowerCase().includes(tujuan.toLowerCase())
     );
     
+    if (!startRoom) {
+      return res.status(404).json({
+        status: 'error',
+        error: `Start room with ID ${start} not found`
+      });
+    }
+    
     if (!targetRoom) {
       return res.status(404).json({
         status: 'error',
-        error: 'Target room not found'
+        error: `Target room "${tujuan}" not found`
       });
     }
+    
+    console.log(`📍 Start: ${startRoom.nama_ruangan}, Target: ${targetRoom.nama_ruangan}`);
     
     // Bangun graph dari koneksi
     const graph = {};
@@ -510,62 +269,87 @@ app.post('/api/pathfinding', async (req, res) => {
       graph[conn.room_to].push(conn.room_from); // Bi-directional
     });
     
-    // BFS Algorithm untuk mencari jalur terpendek
-    const bfs = (startId, targetId) => {
-      const queue = [{ id: startId, path: [startId] }];
-      const visited = new Set([startId]);
-      
-      while (queue.length > 0) {
-        const { id, path } = queue.shift();
-        
-        if (id === targetId) {
-          return path;
-        }
-        
-        for (const neighbor of graph[id] || []) {
-          if (!visited.has(neighbor)) {
-            visited.add(neighbor);
-            queue.push({ id: neighbor, path: [...path, neighbor] });
-          }
-        }
-      }
-      
-      return null; // No path found
-    };
+    console.log('🔗 Graph structure:', graph);
     
-    const pathIds = bfs(parseInt(start), targetRoom.id);
+    // Cari SEMUA kemungkinan rute (maksimal 10)
+    const allPaths = findAllPaths(graph, startRoom.id, targetRoom.id, 10);
     
-    if (!pathIds) {
+    if (allPaths.length === 0) {
       return res.status(404).json({
         status: 'error',
         error: 'No path found to target room'
       });
     }
     
-    // Map IDs ke data ruangan lengkap
-    const pathRooms = pathIds.map(id => 
-      rooms.find(room => room.id === id)
-    );
+    console.log(`🛣️ Found ${allPaths.length} possible routes`);
     
-    // Hitung status kapasitas untuk setiap ruangan di jalur
-    const pathWithCapacity = pathRooms.map(room => ({
-      ...room,
-      capacity_status: room.occupancy >= room.kapasitas_max ? 'FULL' : 
-                     room.occupancy >= room.kapasitas_max * 0.7 ? 'WARNING' : 'SAFE'
-    }));
-    
-    res.json({
-      status: 'success',
-      data: {
-        path: pathWithCapacity,
-        total_steps: pathWithCapacity.length - 1,
-        target_room: targetRoom,
-        capacity_check: pathWithCapacity.every(room => room.capacity_status !== 'FULL')
-      }
+    // Hitung efisiensi untuk setiap rute
+    const routesWithEfficiency = allPaths.map((path, index) => {
+      const efficiency = calculateRouteEfficiency(path, rooms);
+      const roomNames = path.map(id => {
+        const room = rooms.find(r => r.id === id);
+        return room.nama_ruangan;
+      });
+      
+      return {
+        rute: roomNames,
+        langkah: path.length - 1,
+        efisiensi_score: efficiency.efficiency_score,
+        avg_occupancy: efficiency.avg_occupancy,
+        is_optimal: index === 0 // Rute pertama adalah yang terpendek
+      };
     });
     
+    // Sort routes by efficiency score (descending)
+    routesWithEfficiency.sort((a, b) => b.efisiensi_score - a.efisiensi_score);
+    
+    // Tentukan rute optimal (yang memiliki skor tertinggi)
+    const optimalRoute = routesWithEfficiency[0];
+    
+    // Cek jika ada ruangan penuh di rute optimal
+    const fullRoomsInOptimalPath = optimalRoute.rute.filter(roomName => {
+      const room = rooms.find(r => r.nama_ruangan === roomName);
+      return room && room.occupancy >= room.kapasitas_max;
+    });
+    
+    const hasFullRooms = fullRoomsInOptimalPath.length > 0;
+    
+    // Hitung persentase perbandingan dengan optimal untuk setiap rute
+    const routesWithComparison = routesWithEfficiency.map(route => ({
+      ...route,
+      perbandingan_dengan_optimal: Math.round((route.efisiensi_score / optimalRoute.efisiensi_score) * 100) + '%'
+    }));
+    
+    // Siapkan response
+    const response = {
+      status: hasFullRooms ? 'penuh' : 'aman',
+      jalur_optimal: optimalRoute.rute,
+      semua_kemungkinan_rute: routesWithComparison,
+      ruangan_asal: startRoom.nama_ruangan,
+      ruangan_tujuan: targetRoom.nama_ruangan,
+      occupancy_tujuan: `${targetRoom.occupancy}/${targetRoom.kapasitas_max} (${((targetRoom.occupancy / targetRoom.kapasitas_max) * 100).toFixed(1)}%)`
+    };
+    
+    if (hasFullRooms) {
+      response.ruangan_penuh = fullRoomsInOptimalPath;
+      response.occupancy = fullRoomsInOptimalPath.map(roomName => {
+        const room = rooms.find(r => r.nama_ruangan === roomName);
+        return `${room.occupancy}/${room.kapasitas_max}`;
+      });
+    }
+    
+    console.log('✅ Pathfinding completed successfully');
+    console.log('📤 Response:', {
+      status: response.status,
+      optimal_route_steps: optimalRoute.rute.length - 1,
+      total_routes_found: routesWithComparison.length,
+      has_full_rooms: hasFullRooms
+    });
+    
+    res.json(response);
+    
   } catch (error) {
-    console.error('Error in pathfinding:', error);
+    console.error('❌ Error in pathfinding:', error);
     res.status(500).json({
       status: 'error',
       error: 'Pathfinding failed',
@@ -586,6 +370,7 @@ app.get('/', (req, res) => {
       dbTest: '/api/db-test',
       rooms: {
         getAll: 'GET /api/rooms',
+        getStats: 'GET /api/rooms/stats',
         getOne: 'GET /api/rooms/:id',
         create: 'POST /api/rooms',
         update: 'PUT /api/rooms/:id',
@@ -594,11 +379,17 @@ app.get('/', (req, res) => {
       },
       connections: {
         getAll: 'GET /api/connections',
+        getRoomConnections: 'GET /api/connections/room/:roomId',
+        debug: 'GET /api/connections/debug',
         create: 'POST /api/connections',
-        delete: 'DELETE /api/connections/:id',
-        debug: 'GET /api/connections/debug'
+        delete: 'DELETE /api/connections/:id'
       },
-      pathfinding: 'POST /api/pathfinding'
+      pathfinding: {
+        health: 'GET /api/pathfinding/health',
+        graph: 'GET /api/pathfinding/graph',
+        findPath: 'POST /api/pathfinding',
+        legacy: 'POST /api/pathfinding/legacy'
+      }
     },
     documentation: 'Check README.md for complete API documentation'
   });
@@ -616,16 +407,21 @@ app.use('/api/*', (req, res) => {
       'GET /api/health',
       'GET /api/db-test',
       'GET /api/rooms',
-      'POST /api/rooms',
+      'GET /api/rooms/stats',
       'GET /api/rooms/:id',
+      'POST /api/rooms',
       'PUT /api/rooms/:id',
       'DELETE /api/rooms/:id',
       'PUT /api/rooms/:id/occupancy',
       'GET /api/connections',
+      'GET /api/connections/debug',
+      'GET /api/connections/room/:roomId',
       'POST /api/connections',
       'DELETE /api/connections/:id',
-      'GET /api/connections/debug',
-      'POST /api/pathfinding'
+      'GET /api/pathfinding/health',
+      'GET /api/pathfinding/graph',
+      'POST /api/pathfinding',
+      'POST /api/pathfinding/legacy'
     ]
   });
 });
@@ -669,14 +465,40 @@ const startServer = async () => {
     
     app.listen(port, '0.0.0.0', () => {
       console.log('\n🚀 Office Room Management Backend Started Successfully');
-      console.log('═'.repeat(50));
+      console.log('═'.repeat(60));
       console.log(`📍 Port: ${port}`);
       console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`📊 Database: ${dbConnected ? '✅ Connected' : '❌ Disconnected'}`);
       console.log(`🔗 Health Check: http://localhost:${port}/api/health`);
       console.log(`🔗 DB Test: http://localhost:${port}/api/db-test`);
       console.log(`🔗 API Root: http://localhost:${port}/`);
-      console.log('═'.repeat(50));
+      console.log('═'.repeat(60));
+      console.log('🎯 Enhanced Pathfinding Algorithm: ACTIVE');
+      console.log('📈 Multiple Route Analysis: ENABLED');
+      console.log('🔍 Efficiency Scoring: IMPLEMENTED');
+      console.log('🔄 Controller Architecture: IMPLEMENTED');
+      console.log('═'.repeat(60));
+      console.log('\n📋 Registered Routes:');
+      console.log('  🏢 Rooms:');
+      console.log('    GET    /api/rooms');
+      console.log('    GET    /api/rooms/stats');
+      console.log('    GET    /api/rooms/:id');
+      console.log('    POST   /api/rooms');
+      console.log('    PUT    /api/rooms/:id');
+      console.log('    DELETE /api/rooms/:id');
+      console.log('    PUT    /api/rooms/:id/occupancy');
+      console.log('  🔗 Connections:');
+      console.log('    GET    /api/connections');
+      console.log('    GET    /api/connections/debug');
+      console.log('    GET    /api/connections/room/:roomId');
+      console.log('    POST   /api/connections');
+      console.log('    DELETE /api/connections/:id');
+      console.log('  🧭 Pathfinding:');
+      console.log('    GET    /api/pathfinding/health');
+      console.log('    GET    /api/pathfinding/graph');
+      console.log('    POST   /api/pathfinding');
+      console.log('    POST   /api/pathfinding/legacy');
+      console.log('═'.repeat(60));
     });
     
   } catch (error) {

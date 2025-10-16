@@ -1,354 +1,262 @@
 import pool from '../db.js';
 
-class Graph {
-    constructor() {
-        this.nodes = new Map();
-    }
+// Helper function untuk standardized response
+const sendSuccess = (res, data, message = 'Success') => {
+  res.json(data); // Frontend mengharapkan response langsung, tanpa wrapper
+};
 
-    addNode(room) {
-        this.nodes.set(room.id, {
-            ...room,
-            neighbors: new Set()
+const sendError = (res, error, statusCode = 500) => {
+  console.error('❌ Pathfinding Controller Error:', error);
+  res.status(statusCode).json({ 
+    error: error.message || 'Pathfinding failed'
+  });
+};
+
+/**
+ * Enhanced BFS untuk mencari semua kemungkinan rute
+ */
+const findAllPaths = (graph, startId, targetId, maxPaths = 10) => {
+  const queue = [{ id: startId, path: [startId], visited: new Set([startId]) }];
+  const allPaths = [];
+  
+  while (queue.length > 0 && allPaths.length < maxPaths) {
+    const { id, path, visited } = queue.shift();
+    
+    if (id === targetId) {
+      allPaths.push(path);
+      continue;
+    }
+    
+    for (const neighbor of graph[id] || []) {
+      if (!visited.has(neighbor)) {
+        const newVisited = new Set(visited);
+        newVisited.add(neighbor);
+        queue.push({ 
+          id: neighbor, 
+          path: [...path, neighbor], 
+          visited: newVisited 
         });
+      }
     }
+  }
+  
+  return allPaths;
+};
 
-    addEdge(from, to) {
-        if (this.nodes.has(from) && this.nodes.has(to)) {
-            this.nodes.get(from).neighbors.add(to);
-            this.nodes.get(to).neighbors.add(from);
-            console.log(`Edge added: ${from} <-> ${to}`);
-        } else {
-            console.log(`Failed to add edge: ${from} <-> ${to} (nodes exist: ${this.nodes.has(from)}, ${this.nodes.has(to)})`);
-        }
-    }
+/**
+ * Hitung skor efisiensi untuk sebuah rute
+ */
+const calculateRouteEfficiency = (path, rooms) => {
+  const roomData = path.map(id => rooms.find(r => r.id === id));
+  
+  // Hitung average occupancy rate (lower is better)
+  const avgOccupancy = roomData.reduce((sum, room) => {
+    return sum + (room.occupancy / room.kapasitas_max);
+  }, 0) / roomData.length;
+  
+  // Skor berdasarkan panjang rute (shorter is better) dan occupancy (lower is better)
+  const lengthScore = Math.max(0, 1 - (path.length - 1) * 0.1);
+  const occupancyScore = 1 - avgOccupancy;
 
-    // Debug method to print graph structure
-    printGraph() {
-        console.log('\n=== GRAPH STRUCTURE ===');
-        for (const [nodeId, node] of this.nodes) {
-            const neighbors = Array.from(node.neighbors);
-            console.log(`Node ${nodeId} (${node.nama_ruangan}): connected to [${neighbors.join(', ')}]`);
-        }
-        console.log('========================\n');
-    }
-
-    bfs(startId, endId) {
-        console.log(`\n=== BFS ALGORITHM ===`);
-        console.log(`Starting BFS from ${startId} to ${endId}`);
-        
-        // Verify start and end nodes exist
-        if (!this.nodes.has(startId)) {
-            console.error(`❌ Start node ${startId} does not exist in graph!`);
-            return null;
-        }
-        if (!this.nodes.has(endId)) {
-            console.error(`❌ End node ${endId} does not exist in graph!`);
-            return null;
-        }
-        
-        const visited = new Set();
-        const queue = [[startId, [startId]]];
-        let iteration = 0;
-        
-        while (queue.length > 0) {
-            iteration++;
-            const [currentId, path] = queue.shift();
-            console.log(`Iteration ${iteration}: Processing node ${currentId}, path: [${path.join(' -> ')}]`);
-            
-            // Check if we reached the target
-            if (currentId === endId) {
-                console.log(`✅ TARGET FOUND! Final path: [${path.join(' -> ')}]`);
-                console.log(`Path length: ${path.length} nodes`);
-                console.log(`=== END BFS ===\n`);
-                return path;
-            }
-            
-            // Skip if already visited
-            if (visited.has(currentId)) {
-                console.log(`  Node ${currentId} already visited, skipping`);
-                continue;
-            }
-            
-            // Mark as visited
-            visited.add(currentId);
-            const currentNode = this.nodes.get(currentId);
-            
-            if (currentNode && currentNode.neighbors && currentNode.neighbors.size > 0) {
-                const neighbors = Array.from(currentNode.neighbors);
-                console.log(`  Node ${currentId} has neighbors: [${neighbors.join(', ')}]`);
-                
-                for (const neighborId of neighbors) {
-                    if (!visited.has(neighborId)) {
-                        const newPath = [...path, neighborId];
-                        queue.push([neighborId, newPath]);
-                        console.log(`    Adding to queue: ${neighborId} with path [${newPath.join(' -> ')}]`);
-                    } else {
-                        console.log(`    Skipping visited neighbor: ${neighborId}`);
-                    }
-                }
-            } else {
-                console.log(`  Node ${currentId} has no neighbors or is invalid`);
-            }
-            
-            console.log(`  Queue after processing: ${queue.map(q => `[${q[0]}: ${q[1].join('->')}]`).join(', ')}`);
-            console.log(`  Visited: [${Array.from(visited).join(', ')}]\n`);
-        }
-        
-        console.log(`❌ NO PATH FOUND from ${startId} to ${endId}`);
-        console.log(`Final visited nodes: [${Array.from(visited).join(', ')}]`);
-        console.log(`=== END BFS ===\n`);
-        return null;
-    }
-}
-
-// Helper function to normalize room names for comparison
-const normalizeRoomName = (name) => {
-    return name ? name.trim().toLowerCase().replace(/\s+/g, ' ') : '';
+  // Weighted score: 40% length, 60% occupancy
+  const efficiencyScore = (lengthScore * 0.4 + occupancyScore * 0.6) * 100;
+  
+  return {
+    efficiency_score: Math.round(efficiencyScore),
+    avg_occupancy: (avgOccupancy * 100).toFixed(1) + '%',
+    length: path.length - 1
+  };
 };
 
 export const findPath = async (req, res) => {
-    try {
-        const { asal, tujuan } = req.body;
-        
-        console.log('\n' + '='.repeat(50));
-        console.log('=== PATHFINDING REQUEST START ===');
-        console.log('='.repeat(50));
-        console.log('Received pathfinding request:', { asal, tujuan });
-        
-        if (!asal || !tujuan) {
-            return res.status(400).json({ error: 'Asal dan tujuan harus diisi' });
-        }
-        
-        if (asal === tujuan) {
-            return res.status(400).json({ error: 'Asal dan tujuan tidak boleh sama' });
-        }
-        
-        // Get all rooms and connections
-        const roomsResult = await pool.query('SELECT * FROM rooms ORDER BY id');
-        const connectionsResult = await pool.query('SELECT * FROM connections ORDER BY id');
-        
-        console.log('\n=== DATABASE DATA ===');
-        console.log('Available rooms:', roomsResult.rows.map(r => ({ id: r.id, nama: r.nama_ruangan })));
-        console.log('Available connections:', connectionsResult.rows.map(c => ({ 
-            id: c.id, 
-            from: c.room_from, 
-            to: c.room_to,
-            room_names: `${roomsResult.rows.find(r => r.id === c.room_from)?.nama_ruangan} <-> ${roomsResult.rows.find(r => r.id === c.room_to)?.nama_ruangan}`
-        })));
-        
-        // Build graph
-        console.log('\n=== BUILDING GRAPH ===');
-        const graph = new Graph();
-        
-        // Add all nodes first
-        roomsResult.rows.forEach(room => {
-            console.log(`Adding node: ${room.id} - "${room.nama_ruangan}"`);
-            graph.addNode(room);
-        });
-        
-        // Then add all edges
-        connectionsResult.rows.forEach(conn => {
-            const fromRoom = roomsResult.rows.find(r => r.id === conn.room_from);
-            const toRoom = roomsResult.rows.find(r => r.id === conn.room_to);
-            console.log(`Adding edge: ${conn.room_from} (${fromRoom?.nama_ruangan}) <-> ${conn.room_to} (${toRoom?.nama_ruangan})`);
-            graph.addEdge(conn.room_from, conn.room_to);
-        });
-        
-        // FIXED: Add edges bidirectionally even though stored in one direction
-        connectionsResult.rows.forEach(conn => {
-            const fromRoom = roomsResult.rows.find(r => r.id === conn.room_from);
-            const toRoom = roomsResult.rows.find(r => r.id === conn.room_to);
-            console.log(`Adding bidirectional edge: ${conn.room_from} (${fromRoom?.nama_ruangan}) <-> ${conn.room_to} (${toRoom?.nama_ruangan})`);
-            
-            // FIXED: Always add edge in both directions for pathfinding
-            graph.addEdge(conn.room_from, conn.room_to);
-            // The addEdge method in Graph class already handles bidirectional connections
-        });
-        
-        // Print complete graph structure
-        graph.printGraph();
-        
-        // Normalize input room names
-        const normalizedAsal = normalizeRoomName(asal);
-        const normalizedTujuan = normalizeRoomName(tujuan);
-        
-        console.log('=== ROOM MATCHING ===');
-        console.log('Input rooms:', { asal, tujuan });
-        console.log('Normalized input:', { normalizedAsal, normalizedTujuan });
-        
-        // Find start and target rooms using normalized comparison
-        console.log('Searching for start room...');
-        const startRoom = roomsResult.rows.find(r => {
-            const normalized = normalizeRoomName(r.nama_ruangan);
-            console.log(`Comparing "${normalized}" with "${normalizedAsal}": ${normalized === normalizedAsal}`);
-            return normalized === normalizedAsal;
-        });
-        
-        console.log('Searching for target room...');
-        const targetRoom = roomsResult.rows.find(r => {
-            const normalized = normalizeRoomName(r.nama_ruangan);
-            console.log(`Comparing "${normalized}" with "${normalizedTujuan}": ${normalized === normalizedTujuan}`);
-            return normalized === normalizedTujuan;
-        });
-        
-        console.log('Found rooms:', { 
-            startRoom: startRoom ? { id: startRoom.id, nama: startRoom.nama_ruangan } : null,
-            targetRoom: targetRoom ? { id: targetRoom.id, nama: targetRoom.nama_ruangan } : null
-        });
-        
-        if (!startRoom) {
-            console.log(`❌ Start room "${asal}" not found`);
-            return res.status(404).json({ 
-                error: `Ruangan asal "${asal}" tidak ditemukan`,
-                available_rooms: roomsResult.rows.map(r => r.nama_ruangan)
-            });
-        }
-        
-        if (!targetRoom) {
-            console.log(`❌ Target room "${tujuan}" not found`);
-            return res.status(404).json({ 
-                error: `Ruangan tujuan "${tujuan}" tidak ditemukan`,
-                available_rooms: roomsResult.rows.map(r => r.nama_ruangan)
-            });
-        }
-        
-        // Check target room capacity
-        const occupancyPercentage = (targetRoom.occupancy / targetRoom.kapasitas_max) * 100;
-        if (occupancyPercentage >= 90) {
-            return res.json({
-                status: 'penuh',
-                message: 'Harap tunggu - ruangan tujuan penuh',
-                ruangan_tujuan: targetRoom.nama_ruangan,
-                ruangan_asal: startRoom.nama_ruangan,
-                occupancy: `${occupancyPercentage.toFixed(1)}%`
-            });
-        }
-        
-        // Find path using BFS from start to target
-        console.log('\n=== PATHFINDING ===');
-        console.log(`Finding path from ${startRoom.id} (${startRoom.nama_ruangan}) to ${targetRoom.id} (${targetRoom.nama_ruangan})`);
-        
-        const pathIds = graph.bfs(startRoom.id, targetRoom.id);
-        
-        console.log('\n=== PATHFINDING RESULT ===');
-        console.log('BFS returned path IDs:', pathIds);
-        
-        if (!pathIds || pathIds.length === 0) {
-            console.log('❌ No path found between rooms');
-            return res.status(404).json({ 
-                error: 'Tidak ada jalur menuju ruangan tujuan',
-                startRoom: startRoom.nama_ruangan,
-                targetRoom: targetRoom.nama_ruangan
-            });
-        }
-        
-        // Convert path IDs to room objects and names
-        console.log('=== PATH CONVERSION ===');
-        const pathRooms = pathIds.map((roomId, index) => {
-            const room = roomsResult.rows.find(r => r.id === roomId);
-            console.log(`Step ${index}: ID ${roomId} -> Room "${room ? room.nama_ruangan : 'NOT FOUND'}"`);
-            if (!room) {
-                console.error(`❌ Room with ID ${roomId} not found in database!`);
-            }
-            return room;
-        }).filter(room => room !== undefined);
-        
-        console.log('Path rooms (objects):', pathRooms.map(r => ({ id: r.id, nama: r.nama_ruangan })));
-        
-        const pathRoomNames = pathRooms.map(r => r.nama_ruangan);
-        console.log('Path room names:', pathRoomNames);
-        
-        // Verify the path starts and ends correctly
-        console.log('=== PATH VALIDATION ===');
-        console.log(`Expected start: "${startRoom.nama_ruangan}"`);
-        console.log(`Actual start: "${pathRoomNames[0]}"`);
-        console.log(`Expected end: "${targetRoom.nama_ruangan}"`);
-        console.log(`Actual end: "${pathRoomNames[pathRoomNames.length - 1]}"`);
-        
-        if (pathRoomNames[0] !== startRoom.nama_ruangan) {
-            console.error(`❌ CRITICAL ERROR: Path should start with "${startRoom.nama_ruangan}" but starts with "${pathRoomNames[0]}"`);
-            console.error('This indicates a serious bug in the pathfinding algorithm!');
-            console.error('PathIDs:', pathIds);
-            console.error('StartRoom ID:', startRoom.id);
-            console.error('Expected first ID should be:', startRoom.id);
-            console.error('Actual first ID is:', pathIds[0]);
-            
-            // This should not happen - let's return an error
-            return res.status(500).json({ 
-                error: 'Pathfinding algorithm error: incorrect start room',
-                debug_info: {
-                    expected_start: startRoom.nama_ruangan,
-                    actual_start: pathRoomNames[0],
-                    path_ids: pathIds,
-                    expected_start_id: startRoom.id
-                }
-            });
-        }
-        
-        if (pathRoomNames[pathRoomNames.length - 1] !== targetRoom.nama_ruangan) {
-            console.error(`❌ CRITICAL ERROR: Path should end with "${targetRoom.nama_ruangan}" but ends with "${pathRoomNames[pathRoomNames.length - 1]}"`);
-            
-            return res.status(500).json({ 
-                error: 'Pathfinding algorithm error: incorrect end room',
-                debug_info: {
-                    expected_end: targetRoom.nama_ruangan,
-                    actual_end: pathRoomNames[pathRoomNames.length - 1],
-                    path_ids: pathIds,
-                    expected_end_id: targetRoom.id
-                }
-            });
-        }
-        
-        // Check capacity along the path
-        const problematicRooms = pathRooms.filter(room => {
-            const percentage = (room.occupancy / room.kapasitas_max) * 100;
-            return percentage >= 90;
-        });
-        
-        if (problematicRooms.length > 0) {
-            const response = {
-                status: 'penuh',
-                message: 'Harap tunggu - jalur melewati ruangan penuh',
-                ruangan_penuh: problematicRooms.map(r => r.nama_ruangan),
-                ruangan_asal: startRoom.nama_ruangan, // FIXED: Include start room
-                ruangan_tujuan: targetRoom.nama_ruangan,
-                occupancy: problematicRooms.map(r => 
-                    `${((r.occupancy / r.kapasitas_max) * 100).toFixed(1)}%`
-                ),
-                jalur_optimal: pathRoomNames
-            };
-            
-            console.log('=== FINAL RESPONSE (PENUH) ===');
-            console.log(JSON.stringify(response, null, 2));
-            console.log('='.repeat(50) + '\n');
-            return res.json(response);
-        }
-        
-        // Return optimal path
-        const response = {
-            status: 'aman',
-            message: 'Jalur tersedia',
-            jalur_optimal: pathRoomNames,
-            ruangan_asal: startRoom.nama_ruangan, // FIXED: Include start room
-            ruangan_tujuan: targetRoom.nama_ruangan,
-            occupancy_tujuan: `${occupancyPercentage.toFixed(1)}%`,
-            detail_path: pathRooms.map(room => ({
-                id: room.id,
-                nama: room.nama_ruangan,
-                occupancy: `${((room.occupancy / room.kapasitas_max) * 100).toFixed(1)}%`,
-                status: (room.occupancy / room.kapasitas_max) * 100 < 70 ? 'hijau' : 
-                       (room.occupancy / room.kapasitas_max) * 100 < 90 ? 'kuning' : 'merah'
-            }))
-        };
-        
-        console.log('=== FINAL RESPONSE (AMAN) ===');
-        console.log(JSON.stringify(response, null, 2));
-        console.log('='.repeat(50) + '\n');
-        res.json(response);
-        
-    } catch (error) {
-        console.error('❌ PATHFINDING ERROR:', error);
-        console.error(error.stack);
-        res.status(500).json({ error: error.message });
+  try {
+    const { tujuan, start = 1 } = req.body;
+    
+    console.log('🚀 Pathfinding request:', { tujuan, start });
+    
+    if (!tujuan) {
+      return sendError(res, new Error('Missing required field: tujuan'), 400);
     }
+    
+    // Dapatkan semua ruangan dan koneksi
+    const roomsResult = await pool.query('SELECT * FROM rooms');
+    const connectionsResult = await pool.query('SELECT * FROM connections');
+    
+    const rooms = roomsResult.rows;
+    const connections = connectionsResult.rows;
+    
+    console.log(`📊 Loaded ${rooms.length} rooms and ${connections.length} connections`);
+    
+    // Cari ruangan asal dan tujuan
+    const startRoom = rooms.find(room => room.id === parseInt(start));
+    const targetRoom = rooms.find(room => 
+      room.nama_ruangan.toLowerCase().includes(tujuan.toLowerCase())
+    );
+    
+    if (!startRoom) {
+      return sendError(res, new Error(`Start room with ID ${start} not found`), 404);
+    }
+    
+    if (!targetRoom) {
+      return sendError(res, new Error(`Target room "${tujuan}" not found`), 404);
+    }
+    
+    console.log(`📍 Start: ${startRoom.nama_ruangan}, Target: ${targetRoom.nama_ruangan}`);
+    
+    // Bangun graph dari koneksi
+    const graph = {};
+    rooms.forEach(room => {
+      graph[room.id] = [];
+    });
+    
+    connections.forEach(conn => {
+      graph[conn.room_from].push(conn.room_to);
+      graph[conn.room_to].push(conn.room_from); // Bi-directional
+    });
+    
+    console.log('🔗 Graph structure:', graph);
+    
+    // Cari SEMUA kemungkinan rute (maksimal 10)
+    const allPaths = findAllPaths(graph, startRoom.id, targetRoom.id, 10);
+    
+    if (allPaths.length === 0) {
+      return sendError(res, new Error('No path found to target room'), 404);
+    }
+    
+    console.log(`🛣️ Found ${allPaths.length} possible routes`);
+    
+    // Hitung efisiensi untuk setiap rute
+    const routesWithEfficiency = allPaths.map((path, index) => {
+      const efficiency = calculateRouteEfficiency(path, rooms);
+      const roomNames = path.map(id => {
+        const room = rooms.find(r => r.id === id);
+        return room.nama_ruangan;
+      });
+      
+      return {
+        rute: roomNames,
+        langkah: path.length - 1,
+        efisiensi_score: efficiency.efficiency_score,
+        avg_occupancy: efficiency.avg_occupancy,
+        is_optimal: index === 0
+      };
+    });
+    
+    // Sort routes by efficiency score (descending)
+    routesWithEfficiency.sort((a, b) => b.efisiensi_score - a.efisiensi_score);
+    
+    // Tentukan rute optimal (yang memiliki skor tertinggi)
+    const optimalRoute = routesWithEfficiency[0];
+    
+    // Cek jika ada ruangan penuh di rute optimal
+    const fullRoomsInOptimalPath = optimalRoute.rute.filter(roomName => {
+      const room = rooms.find(r => r.nama_ruangan === roomName);
+      return room && room.occupancy >= room.kapasitas_max;
+    });
+    
+    const hasFullRooms = fullRoomsInOptimalPath.length > 0;
+    
+    // Hitung persentase perbandingan dengan optimal untuk setiap rute
+    const routesWithComparison = routesWithEfficiency.map(route => ({
+      ...route,
+      perbandingan_dengan_optimal: Math.round((route.efisiensi_score / optimalRoute.efisiensi_score) * 100) + '%'
+    }));
+    
+    // Siapkan response - format yang diharapkan frontend
+    const response = {
+      status: hasFullRooms ? 'penuh' : 'aman',
+      jalur_optimal: optimalRoute.rute,
+      semua_kemungkinan_rute: routesWithComparison,
+      ruangan_asal: startRoom.nama_ruangan,
+      ruangan_tujuan: targetRoom.nama_ruangan,
+      occupancy_tujuan: `${targetRoom.occupancy}/${targetRoom.kapasitas_max} (${((targetRoom.occupancy / targetRoom.kapasitas_max) * 100).toFixed(1)}%)`
+    };
+    
+    if (hasFullRooms) {
+      response.ruangan_penuh = fullRoomsInOptimalPath;
+      response.occupancy = fullRoomsInOptimalPath.map(roomName => {
+        const room = rooms.find(r => r.nama_ruangan === roomName);
+        return `${room.occupancy}/${room.kapasitas_max}`;
+      });
+    }
+    
+    console.log('✅ Pathfinding completed successfully');
+    console.log('📤 Response:', {
+      status: response.status,
+      optimal_route_steps: optimalRoute.rute.length - 1,
+      total_routes_found: routesWithComparison.length,
+      has_full_rooms: hasFullRooms
+    });
+    
+    sendSuccess(res, response, 'Path found successfully');
+    
+  } catch (error) {
+    console.error('❌ Error in pathfinding:', error);
+    sendError(res, error);
+  }
+};
+
+// Health check untuk pathfinding service
+export const pathfindingHealth = async (req, res) => {
+  try {
+    const roomsResult = await pool.query('SELECT COUNT(*) FROM rooms');
+    const connectionsResult = await pool.query('SELECT COUNT(*) FROM connections');
+    
+    const healthInfo = {
+      service: 'Pathfinding',
+      status: 'operational',
+      rooms_count: parseInt(roomsResult.rows[0].count),
+      connections_count: parseInt(connectionsResult.rows[0].count),
+      timestamp: new Date().toISOString()
+    };
+    
+    res.json(healthInfo);
+  } catch (error) {
+    console.error('Pathfinding health check error:', error);
+    res.status(500).json({ 
+      service: 'Pathfinding',
+      status: 'degraded',
+      error: error.message 
+    });
+  }
+};
+
+// Get graph structure untuk debugging
+export const getGraphStructure = async (req, res) => {
+  try {
+    const roomsResult = await pool.query('SELECT id, nama_ruangan FROM rooms ORDER BY id');
+    const connectionsResult = await pool.query('SELECT * FROM connections ORDER BY id');
+    
+    const graph = {};
+    roomsResult.rows.forEach(room => {
+      graph[room.id] = {
+        name: room.nama_ruangan,
+        neighbors: []
+      };
+    });
+    
+    connectionsResult.rows.forEach(conn => {
+      if (graph[conn.room_from]) {
+        graph[conn.room_from].neighbors.push(conn.room_to);
+      }
+      if (graph[conn.room_to]) {
+        graph[conn.room_to].neighbors.push(conn.room_from);
+      }
+    });
+    
+    const graphData = {
+      nodes: roomsResult.rows,
+      edges: connectionsResult.rows,
+      graph_structure: graph,
+      summary: {
+        total_nodes: roomsResult.rowCount,
+        total_edges: connectionsResult.rowCount
+      }
+    };
+    
+    res.json(graphData);
+  } catch (error) {
+    console.error('Error getting graph structure:', error);
+    res.status(500).json({ error: error.message });
+  }
 };
