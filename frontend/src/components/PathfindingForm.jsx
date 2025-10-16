@@ -13,7 +13,7 @@ const PathfindingForm = ({ rooms, connections }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    console.log('🔍 Form values:', { asal, tujuan }); // DEBUG
+    console.log('🔍 Form values:', { asal, tujuan });
     
     if (!asal || !tujuan) {
       setError('Pilih ruangan asal dan tujuan terlebih dahulu');
@@ -31,7 +31,6 @@ const PathfindingForm = ({ rooms, connections }) => {
     setError('');
     
     try {
-      // ✅ PERBAIKAN: Cari ID ruangan dari nama yang dipilih
       const startRoom = rooms.find(room => room.nama_ruangan === asal);
       const targetRoom = rooms.find(room => room.nama_ruangan === tujuan);
       
@@ -45,15 +44,13 @@ const PathfindingForm = ({ rooms, connections }) => {
       
       console.log('🎯 Sending pathfinding request:', {
         tujuan: targetRoom.nama_ruangan,
-        start: startRoom.id // ✅ Gunakan ID, bukan nama
+        start: startRoom.id
       });
       
-      // ✅ PERBAIKAN: Kirim request dengan parameter yang benar
       const response = await pathfindingAPI.findPath(tujuan, startRoom.id);
       
       console.log('✅ Pathfinding response:', response);
       
-      // ✅ PERBAIKAN: Handle response data
       const resultData = response.data || response;
       
       if (!resultData) {
@@ -66,7 +63,6 @@ const PathfindingForm = ({ rooms, connections }) => {
       
       setResult(resultData);
       
-      // Auto-select target room for visualization
       setTimeout(() => {
         if (targetRoom) {
           setSelectedRoom(targetRoom);
@@ -89,7 +85,6 @@ const PathfindingForm = ({ rooms, connections }) => {
     setSelectedRoom(room);
   };
 
-  // ✅ PERBAIKAN: Filter available rooms dengan benar
   const getAvailableTujuan = () => 
     rooms.filter(room => room.nama_ruangan !== asal);
   
@@ -104,39 +99,50 @@ const PathfindingForm = ({ rooms, connections }) => {
     setError('');
   };
 
-  // ✅ PERBAIKAN: Auto-fill form ketika room di-click dari graph
   const handleRoomSelectFromGraph = (room) => {
     if (!asal) {
       setAsal(room.nama_ruangan);
     } else if (!tujuan) {
       setTujuan(room.nama_ruangan);
     } else {
-      // Jika kedua field sudah terisi, ganti tujuan
       setTujuan(room.nama_ruangan);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-2xl font-bold mb-2">🧭 Decision Making & Pathfinding</h3>
-        <p className="text-gray-600 mb-6">
-          Cari jalur optimal untuk tamu dengan algoritma BFS dan analisis occupancy ruangan
-        </p>
+    <div className="space-y-4">
+      <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-xl font-bold text-gray-800">Decision Making & Pathfinding</h3>
+            <p className="text-gray-600 text-sm mt-1">
+              Cari jalur optimal dengan algoritma BFS dan analisis occupancy
+            </p>
+          </div>
+          <span className="text-3xl">🧭</span>
+        </div>
         
         {/* Error Display */}
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4">
-            <strong>Error: </strong>
-            {error}
+          <div className="bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded-lg mb-4 text-sm">
+            <div className="flex items-center">
+              <span className="text-lg mr-2">❌</span>
+              <div>
+                <strong>Error: </strong>
+                {error}
+              </div>
+            </div>
           </div>
         )}
 
+        {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-4">
+            {/* Asal Selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                🚀 Ruangan Asal (Start)
+                🚀 Ruangan Asal
               </label>
               <select
                 value={asal}
@@ -146,7 +152,7 @@ const PathfindingForm = ({ rooms, connections }) => {
                   setSelectedRoom(null);
                   setError('');
                 }}
-                className="w-full border border-gray-300 rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                 required
                 disabled={loading}
               >
@@ -163,14 +169,15 @@ const PathfindingForm = ({ rooms, connections }) => {
               {asal && (
                 <p className="text-xs text-green-600 mt-2 flex items-center">
                   <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                  Start point: <strong className="ml-1">{asal}</strong>
+                  Start: <strong className="ml-1">{asal}</strong>
                 </p>
               )}
             </div>
 
+            {/* Tujuan Selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                🎯 Ruangan Tujuan (Target)
+                🎯 Ruangan Tujuan
               </label>
               <select
                 value={tujuan}
@@ -180,7 +187,7 @@ const PathfindingForm = ({ rooms, connections }) => {
                   setSelectedRoom(null);
                   setError('');
                 }}
-                className="w-full border border-gray-300 rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                 required
                 disabled={loading}
               >
@@ -197,26 +204,28 @@ const PathfindingForm = ({ rooms, connections }) => {
               {tujuan && (
                 <p className="text-xs text-purple-600 mt-2 flex items-center">
                   <span className="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
-                  Target point: <strong className="ml-1">{tujuan}</strong>
+                  Target: <strong className="ml-1">{tujuan}</strong>
                 </p>
               )}
             </div>
           </div>
 
-          <div className="flex space-x-3 pt-2">
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 pt-2">
             <button
               type="submit"
               disabled={loading || !asal || !tujuan}
-              className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 transition-all font-medium shadow-md"
+              className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-4 rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 transition-all font-medium shadow-md text-base min-h-[52px] flex items-center justify-center"
             >
               {loading ? (
                 <span className="flex items-center justify-center">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  🔍 Mencari Jalur Optimal...
+                  Mencari Jalur...
                 </span>
               ) : (
                 <span className="flex items-center justify-center">
-                  🚀 Cari Jalur Optimal
+                  <span className="text-lg mr-2">🚀</span>
+                  Cari Jalur Optimal
                 </span>
               )}
             </button>
@@ -225,33 +234,37 @@ const PathfindingForm = ({ rooms, connections }) => {
               type="button"
               onClick={resetForm}
               disabled={loading}
-              className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 transition-colors font-medium"
+              className="px-4 py-4 bg-gray-500 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 transition-colors font-medium text-base min-h-[52px] flex items-center justify-center"
             >
-              🔄 Reset
+              <span className="flex items-center justify-center">
+                <span className="text-lg mr-2">🔄</span>
+                Reset
+              </span>
             </button>
           </div>
 
+          {/* Route Preview */}
           {asal && tujuan && (
-            <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-800 font-medium mb-2">
+            <div className="p-3 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800 font-medium mb-2 text-center">
                 📍 Rute yang akan dicari:
               </p>
-              <div className="flex items-center justify-center space-x-4">
+              <div className="flex flex-col sm:flex-row items-center justify-center space-y-2 sm:space-y-0 sm:space-x-4">
                 <div className="text-center">
-                  <div className="px-3 py-2 bg-blue-100 text-blue-800 rounded-lg font-medium text-sm shadow-sm">
+                  <div className="px-3 py-2 bg-blue-100 text-blue-800 rounded-lg font-medium text-sm shadow-sm max-w-[140px] truncate">
                     🚀 {asal}
                   </div>
                 </div>
-                <div className="text-2xl text-blue-500 animate-pulse">⟶</div>
+                <div className="text-xl text-blue-500 animate-pulse">⟶</div>
                 <div className="text-center">
-                  <div className="px-3 py-2 bg-purple-100 text-purple-800 rounded-lg font-medium text-sm shadow-sm">
+                  <div className="px-3 py-2 bg-purple-100 text-purple-800 rounded-lg font-medium text-sm shadow-sm max-w-[140px] truncate">
                     🎯 {tujuan}
                   </div>
                 </div>
               </div>
               
-              <div className="mt-3 text-xs text-blue-600 text-center">
-                💡 Sistem akan mencari jalur menggunakan algoritma BFS dengan analisis occupancy
+              <div className="mt-2 text-xs text-blue-600 text-center">
+                💡 Sistem akan mencari jalur menggunakan algoritma BFS
               </div>
             </div>
           )}
@@ -259,76 +272,121 @@ const PathfindingForm = ({ rooms, connections }) => {
 
         {/* Results Section */}
         {result && (
-          <div className={`p-6 rounded-xl border-2 ${
+          <div className={`p-4 rounded-xl border-2 ${
             result.status === 'aman' ? 'bg-green-50 border-green-300' : 
             result.status === 'penuh' ? 'bg-red-50 border-red-300' : 'bg-gray-50 border-gray-300'
           } transition-all duration-300`}>
-            <h4 className={`text-xl font-bold mb-4 ${
-              result.status === 'aman' ? 'text-green-800' : 
-              result.status === 'penuh' ? 'text-red-800' : 'text-gray-800'
-            }`}>
-              {result.status === 'aman' ? '✅ JALUR OPTIMAL DITEMUKAN' : 
-               result.status === 'penuh' ? '❌ JALUR TERHALANG' : '⚠️ HASIL PENCARIAN'}
-            </h4>
+            <div className="flex items-center mb-4">
+              <span className={`text-2xl mr-2 ${
+                result.status === 'aman' ? 'text-green-600' : 
+                result.status === 'penuh' ? 'text-red-600' : 'text-gray-600'
+              }`}>
+                {result.status === 'aman' ? '✅' : 
+                 result.status === 'penuh' ? '❌' : '⚠️'}
+              </span>
+              <h4 className={`text-lg font-bold ${
+                result.status === 'aman' ? 'text-green-800' : 
+                result.status === 'penuh' ? 'text-red-800' : 'text-gray-800'
+              }`}>
+                {result.status === 'aman' ? 'JALUR OPTIMAL DITEMUKAN' : 
+                 result.status === 'penuh' ? 'JALUR TERHALANG' : 'HASIL PENCARIAN'}
+              </h4>
+            </div>
             
             {result.status === 'aman' && result.jalur_optimal && (
-              <div className="space-y-6">
+              <div className="space-y-4">
                 {/* Optimal Path */}
-                <div className="bg-white p-4 rounded-lg border border-green-200 shadow-sm">
-                  <p className="font-semibold text-green-800 mb-3 text-lg">🏆 JALUR OPTIMAL:</p>
-                  <div className="flex items-center justify-center flex-wrap gap-2 mb-3">
+                <div className="bg-white p-3 rounded-lg border border-green-200 shadow-sm">
+                  <p className="font-semibold text-green-800 mb-3 text-sm">🏆 JALUR OPTIMAL:</p>
+                  <div className="flex flex-col space-y-2">
                     {result.jalur_optimal.map((room, index) => (
                       <div key={index} className="flex items-center">
-                        {index > 0 && (
-                          <span className="mx-2 text-gray-400 text-lg font-bold">→</span>
-                        )}
-                        <span className={`px-3 py-2 rounded-lg text-sm font-bold ${
+                        <span className={`px-3 py-2 rounded-lg text-sm font-bold flex items-center min-w-[120px] ${
                           index === 0 ? 'bg-blue-500 text-white shadow-md' :
                           index === result.jalur_optimal.length - 1 ? 'bg-purple-500 text-white shadow-md' :
                           'bg-yellow-500 text-white shadow-md'
                         }`}>
-                          {index === 0 ? '🚀' : index === result.jalur_optimal.length - 1 ? '🎯' : `📍${index}`}
-                          <span className="ml-2">{room}</span>
+                          <span className="mr-2">
+                            {index === 0 ? '🚀' : index === result.jalur_optimal.length - 1 ? '🎯' : `📍`}
+                          </span>
+                          <span className="truncate">{room}</span>
                         </span>
+                        {index < result.jalur_optimal.length - 1 && (
+                          <span className="mx-2 text-gray-400 text-sm font-bold">→</span>
+                        )}
                       </div>
                     ))}
                   </div>
-                  <div className="flex justify-between items-center text-sm text-gray-600">
-                    <span>📏 Total {result.jalur_optimal.length - 1} langkah</span>
-                    <span>👥 Occupancy tujuan: {result.occupancy_tujuan || 'N/A'}</span>
+                  <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center text-xs text-gray-600 mt-3 space-y-1 sm:space-y-0">
+                    <span>📏 {result.jalur_optimal.length - 1} langkah</span>
+                    <span>👥 Occupancy: {result.occupancy_tujuan || 'N/A'}</span>
                   </div>
                 </div>
               </div>
             )}
             
             {result.status === 'penuh' && result.ruangan_penuh && (
-              <div className="space-y-4">
-                <div className="bg-red-100 p-4 rounded-lg border border-red-300">
-                  <p className="font-semibold text-red-800 mb-3">🚫 RUANGAN PENUH DI JALUR:</p>
-                  <div className="flex flex-wrap gap-2">
+              <div className="space-y-3">
+                <div className="bg-red-100 p-3 rounded-lg border border-red-300">
+                  <p className="font-semibold text-red-800 mb-2 text-sm">🚫 RUANGAN PENUH DI JALUR:</p>
+                  <div className="flex flex-col space-y-2">
                     {result.ruangan_penuh.map((room, index) => (
-                      <span key={index} className="bg-red-200 text-red-800 px-3 py-2 rounded-lg text-sm font-medium border border-red-300">
-                        ❌ {room} ({result.occupancy?.[index] || '100%'})
-                      </span>
+                      <div key={index} className="bg-red-200 text-red-800 px-3 py-2 rounded-lg text-sm font-medium border border-red-300 flex items-center">
+                        <span className="mr-2">❌</span>
+                        <span className="truncate">{room}</span>
+                        <span className="ml-2 text-xs opacity-75">
+                          ({result.occupancy?.[index] || '100%'})
+                        </span>
+                      </div>
                     ))}
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Additional Results Info */}
+            {result.all_routes && result.all_routes.length > 0 && (
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800 font-medium mb-2">
+                  📊 Analisis Semua Rute:
+                </p>
+                <div className="text-xs text-blue-700 space-y-1">
+                  <div>• Ditemukan {result.all_routes.length} rute alternatif</div>
+                  <div>• Rute optimal dipilih berdasarkan efisiensi</div>
+                  {result.efficiency_score && (
+                    <div>• Skor efisiensi: {result.efficiency_score.toFixed(2)}/100</div>
+                  )}
                 </div>
               </div>
             )}
           </div>
         )}
 
-        {/* Graph Visualization */}
-        <div className="mt-8">
-          <GraphVisualization
-            rooms={rooms}
-            connections={connections}
-            pathResult={result}
-            startRoom={asal}
-            targetRoom={tujuan}
-            onNodeClick={handleRoomSelectFromGraph} // ✅ PERBAIKAN: Gunakan handler baru
-          />
+        {/* Quick Tips */}
+        <div className="mt-6 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+          <div className="flex items-start space-x-2">
+            <span className="text-lg mt-0.5">💡</span>
+            <div className="text-xs text-gray-600">
+              <strong>Tips:</strong> Pilih ruangan asal dan tujuan, atau klik langsung pada visualisasi graph untuk memilih ruangan dengan cepat.
+            </div>
+          </div>
         </div>
+      </div>
+
+      {/* Graph Visualization */}
+      <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-800">Visualisasi Graph</h3>
+          <span className="text-2xl">📊</span>
+        </div>
+        <GraphVisualization
+          rooms={rooms}
+          connections={connections}
+          pathResult={result}
+          startRoom={asal}
+          targetRoom={tujuan}
+          onNodeClick={handleRoomSelectFromGraph}
+        />
       </div>
     </div>
   );

@@ -16,25 +16,19 @@ const RoomForm = ({ onRoomAdded }) => {
     setError('');
     
     try {
-      // ✅ PERBAIKAN: Handle response yang benar
       const response = await roomsAPI.create(formData);
       
-      // ✅ PERBAIKAN: Reset form setelah success
       setFormData({ 
         nama_ruangan: '', 
         luas: '', 
         kapasitas_max: '' 
       });
       
-      // ✅ Notifikasi success
       console.log('Room created successfully:', response.data);
-      
-      // ✅ Panggil callback untuk refresh data
       onRoomAdded();
       
     } catch (error) {
       console.error('Error creating room:', error);
-      // ✅ PERBAIKAN: Tampilkan error ke user
       setError(error.message || 'Gagal menambahkan ruangan. Periksa koneksi Anda.');
     } finally {
       setLoading(false);
@@ -46,74 +40,78 @@ const RoomForm = ({ onRoomAdded }) => {
       ...formData,
       [e.target.name]: e.target.value
     });
-    // ✅ Clear error ketika user mulai mengetik lagi
     if (error) setError('');
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 bg-white p-6 rounded-lg shadow-lg border border-gray-200">
-      <h3 className="text-lg font-semibold text-gray-800">Tambah Ruangan Baru</h3>
+    <form onSubmit={handleSubmit} className="space-y-4 bg-white p-4 sm:p-6 rounded-xl shadow-lg border border-gray-200">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-gray-800">Tambah Ruangan Baru</h3>
+        <span className="text-2xl">🏢</span>
+      </div>
       
       {/* Error Message */}
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+        <div className="bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded-lg text-sm">
           <strong>Error: </strong>
           {error}
         </div>
       )}
       
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Nama Ruangan *
-        </label>
-        <input
-          type="text"
-          name="nama_ruangan"
-          value={formData.nama_ruangan}
-          onChange={handleChange}
-          className="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-          placeholder="Contoh: Meeting Room A"
-          required
-        />
-      </div>
-      
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Luas (m²) *
-        </label>
-        <input
-          type="number"
-          step="0.01"
-          min="0"
-          name="luas"
-          value={formData.luas}
-          onChange={handleChange}
-          className="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-          placeholder="Contoh: 25.5"
-          required
-        />
-      </div>
-      
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Kapasitas Maksimum *
-        </label>
-        <input
-          type="number"
-          min="1"
-          name="kapasitas_max"
-          value={formData.kapasitas_max}
-          onChange={handleChange}
-          className="mt-1 block w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-          placeholder="Contoh: 15"
-          required
-        />
+      <div className="space-y-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Nama Ruangan *
+          </label>
+          <input
+            type="text"
+            name="nama_ruangan"
+            value={formData.nama_ruangan}
+            onChange={handleChange}
+            className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            placeholder="Contoh: Meeting Room A"
+            required
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Luas (m²) *
+          </label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            name="luas"
+            value={formData.luas}
+            onChange={handleChange}
+            className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            placeholder="Contoh: 25.5"
+            required
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Kapasitas Maksimum *
+          </label>
+          <input
+            type="number"
+            min="1"
+            name="kapasitas_max"
+            value={formData.kapasitas_max}
+            onChange={handleChange}
+            className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            placeholder="Contoh: 15"
+            required
+          />
+        </div>
       </div>
       
       <button
         type="submit"
         disabled={loading}
-        className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-3 rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-md"
+        className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-4 rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-md text-base min-h-[52px] flex items-center justify-center"
       >
         {loading ? (
           <span className="flex items-center justify-center">
@@ -124,7 +122,10 @@ const RoomForm = ({ onRoomAdded }) => {
             Menambahkan...
           </span>
         ) : (
-          '➕ Tambah Ruangan'
+          <span className="flex items-center justify-center">
+            <span className="text-lg mr-2">➕</span>
+            Tambah Ruangan
+          </span>
         )}
       </button>
       
