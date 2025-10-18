@@ -1,53 +1,49 @@
 import pool from '../db.js';
-
-// Helper function untuk standardized response
-const sendSuccess = (res, data, message = 'Success') => {
-  res.json(data); // Frontend mengharapkan response langsung, tanpa wrapper
-};
-
-const sendError = (res, error, statusCode = 500) => {
-  console.error('❌ Pathfinding Controller Error:', error);
-  res.status(statusCode).json({ 
-    error: error.message || 'Pathfinding failed'
-  });
-};
+import { sendSuccess, sendError } from '../utils/responseHelper.js';
+import { logger } from '../utils/logger.js';
 
 /**
- * Enhanced BFS untuk mencari semua kemungkinan rute
+ * Enhanced DFS untuk mencari semua kemungkinan rute dengan depth limit
  */
-const findAllPaths = (graph, startId, targetId, maxPaths = 10) => {
-  const queue = [{ id: startId, path: [startId], visited: new Set([startId]) }];
-  const allPaths = [];
+const findAllPaths = (graph, startId, targetId, maxPaths = 10, maxDepth = 8) => {
+  const results = [];
   
-  while (queue.length > 0 && allPaths.length < maxPaths) {
-    const { id, path, visited } = queue.shift();
-    
-    if (id === targetId) {
-      allPaths.push(path);
-      continue;
+  const dfs = (currentId, path, visited, depth) => {
+    if (depth > maxDepth) return;
+    if (currentId === targetId) {
+      results.push([...path]);
+      return;
     }
     
-    for (const neighbor of graph[id] || []) {
+    for (const neighbor of graph[currentId] || []) {
       if (!visited.has(neighbor)) {
-        const newVisited = new Set(visited);
-        newVisited.add(neighbor);
-        queue.push({ 
-          id: neighbor, 
-          path: [...path, neighbor], 
-          visited: newVisited 
-        });
+        visited.add(neighbor);
+        dfs(neighbor, [...path, neighbor], visited, depth + 1);
+        visited.delete(neighbor);
+        
+        // Early return jika sudah cukup paths
+        if (results.length >= maxPaths) return;
       }
     }
-  }
+  };
   
-  return allPaths;
+  dfs(startId, [startId], new Set([startId]), 0);
+  return results.slice(0, maxPaths);
 };
 
 /**
  * Hitung skor efisiensi untuk sebuah rute
  */
 const calculateRouteEfficiency = (path, rooms) => {
-  const roomData = path.map(id => rooms.find(r => r.id === id));
+  const roomData = path.map(id => rooms.find(r => r.id === id)).filter(Boolean);
+  
+  if (roomData.length === 0) {
+    return {
+      efficiency_score: 0,
+      avg_occupancy: '0%',
+      length: 0
+    };
+  }
   
   // Hitung average occupancy rate (lower is better)
   const avgOccupancy = roomData.reduce((sum, room) => {
@@ -72,20 +68,18 @@ export const findPath = async (req, res) => {
   try {
     const { tujuan, start = 1 } = req.body;
     
-    console.log('🚀 Pathfinding request:', { tujuan, start });
-    
-    if (!tujuan) {
-      return sendError(res, new Error('Missing required field: tujuan'), 400);
-    }
+    logger.info('Pathfinding request received', { tujuan, start });
     
     // Dapatkan semua ruangan dan koneksi
-    const roomsResult = await pool.query('SELECT * FROM rooms');
-    const connectionsResult = await pool.query('SELECT * FROM connections');
+    const [roomsResult, connectionsResult] = await Promise.all([
+      pool.query('SELECT * FROM rooms'),
+      pool.query('SELECT * FROM connections')
+    ]);
     
     const rooms = roomsResult.rows;
     const connections = connectionsResult.rows;
     
-    console.log(`📊 Loaded ${rooms.length} rooms and ${connections.length} connections`);
+    logger.debug(`Loaded ${rooms.length} rooms and ${connections.length} connections`);
     
     // Cari ruangan asal dan tujuan
     const startRoom = rooms.find(room => room.id === parseInt(start));
@@ -94,14 +88,19 @@ export const findPath = async (req, res) => {
     );
     
     if (!startRoom) {
+      logger.warn('Start room not found', { start });
       return sendError(res, new Error(`Start room with ID ${start} not found`), 404);
     }
     
     if (!targetRoom) {
+      logger.warn('Target room not found', { tujuan });
       return sendError(res, new Error(`Target room "${tujuan}" not found`), 404);
     }
     
-    console.log(`📍 Start: ${startRoom.nama_ruangan}, Target: ${targetRoom.nama_ruangan}`);
+    logger.info('Pathfinding parameters', {
+      start: startRoom.nama_ruangan,
+      target: targetRoom.nama_ruangan
+    });
     
     // Bangun graph dari koneksi
     const graph = {};
@@ -114,23 +113,30 @@ export const findPath = async (req, res) => {
       graph[conn.room_to].push(conn.room_from); // Bi-directional
     });
     
-    console.log('🔗 Graph structure:', graph);
+    logger.debug('Graph structure built', { 
+      nodes: Object.keys(graph).length,
+      total_edges: connections.length * 2 // bidirectional
+    });
     
     // Cari SEMUA kemungkinan rute (maksimal 10)
     const allPaths = findAllPaths(graph, startRoom.id, targetRoom.id, 10);
     
     if (allPaths.length === 0) {
+      logger.warn('No path found to target room', {
+        start: startRoom.nama_ruangan,
+        target: targetRoom.nama_ruangan
+      });
       return sendError(res, new Error('No path found to target room'), 404);
     }
     
-    console.log(`🛣️ Found ${allPaths.length} possible routes`);
+    logger.info(`Found ${allPaths.length} possible routes`);
     
     // Hitung efisiensi untuk setiap rute
     const routesWithEfficiency = allPaths.map((path, index) => {
       const efficiency = calculateRouteEfficiency(path, rooms);
       const roomNames = path.map(id => {
         const room = rooms.find(r => r.id === id);
-        return room.nama_ruangan;
+        return room ? room.nama_ruangan : `Unknown (${id})`;
       });
       
       return {
@@ -180,8 +186,7 @@ export const findPath = async (req, res) => {
       });
     }
     
-    console.log('✅ Pathfinding completed successfully');
-    console.log('📤 Response:', {
+    logger.info('Pathfinding completed successfully', {
       status: response.status,
       optimal_route_steps: optimalRoute.rute.length - 1,
       total_routes_found: routesWithComparison.length,
@@ -191,28 +196,36 @@ export const findPath = async (req, res) => {
     sendSuccess(res, response, 'Path found successfully');
     
   } catch (error) {
-    console.error('❌ Error in pathfinding:', error);
+    logger.error('Pathfinding failed', error, {
+      tujuan: req.body.tujuan,
+      start: req.body.start
+    });
     sendError(res, error);
   }
 };
 
-// Health check untuk pathfinding service
 export const pathfindingHealth = async (req, res) => {
   try {
-    const roomsResult = await pool.query('SELECT COUNT(*) FROM rooms');
-    const connectionsResult = await pool.query('SELECT COUNT(*) FROM connections');
+    const [roomsResult, connectionsResult] = await Promise.all([
+      pool.query('SELECT COUNT(*) FROM rooms'),
+      pool.query('SELECT COUNT(*) FROM connections')
+    ]);
     
     const healthInfo = {
       service: 'Pathfinding',
       status: 'operational',
       rooms_count: parseInt(roomsResult.rows[0].count),
       connections_count: parseInt(connectionsResult.rows[0].count),
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      algorithm: 'Enhanced DFS with efficiency scoring',
+      max_paths: 10,
+      max_depth: 8
     };
     
+    logger.debug('Pathfinding health check', healthInfo);
     res.json(healthInfo);
   } catch (error) {
-    console.error('Pathfinding health check error:', error);
+    logger.error('Pathfinding health check failed', error);
     res.status(500).json({ 
       service: 'Pathfinding',
       status: 'degraded',
@@ -221,11 +234,12 @@ export const pathfindingHealth = async (req, res) => {
   }
 };
 
-// Get graph structure untuk debugging
 export const getGraphStructure = async (req, res) => {
   try {
-    const roomsResult = await pool.query('SELECT id, nama_ruangan FROM rooms ORDER BY id');
-    const connectionsResult = await pool.query('SELECT * FROM connections ORDER BY id');
+    const [roomsResult, connectionsResult] = await Promise.all([
+      pool.query('SELECT id, nama_ruangan FROM rooms ORDER BY id'),
+      pool.query('SELECT * FROM connections ORDER BY id')
+    ]);
     
     const graph = {};
     roomsResult.rows.forEach(room => {
@@ -250,13 +264,15 @@ export const getGraphStructure = async (req, res) => {
       graph_structure: graph,
       summary: {
         total_nodes: roomsResult.rowCount,
-        total_edges: connectionsResult.rowCount
+        total_edges: connectionsResult.rowCount,
+        average_connectivity: (connectionsResult.rowCount * 2 / roomsResult.rowCount).toFixed(2)
       }
     };
     
+    logger.debug('Graph structure fetched', graphData.summary);
     res.json(graphData);
   } catch (error) {
-    console.error('Error getting graph structure:', error);
+    logger.error('Failed to get graph structure', error);
     res.status(500).json({ error: error.message });
   }
 };

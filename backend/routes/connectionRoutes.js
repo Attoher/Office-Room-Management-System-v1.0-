@@ -6,6 +6,7 @@ import {
   debugConnections,
   getRoomConnections 
 } from '../controllers/connectionController.js';
+import { validateConnectionData } from '../utils/validation.js';
 
 const router = express.Router();
 
@@ -17,7 +18,7 @@ router.get('/room/:roomId', getRoomConnections);
 
 // Standard CRUD operations
 router.get('/', getAllConnections);
-router.post('/', createConnection);
+router.post('/', validateConnectionData, createConnection);
 router.delete('/:id', deleteConnection);
 
 export default router;

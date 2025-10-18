@@ -54,11 +54,12 @@ function App() {
         connectionsAPI.getAll()
       ]);
       
-      const roomsData = roomsResponse.data?.data || roomsResponse.data || [];
-      const connectionsData = connectionsResponse.data?.data || connectionsResponse.data || [];
+      // FIXED: Langsung menggunakan response karena sudah dinormalisasi di API
+      const roomsData = Array.isArray(roomsResponse) ? roomsResponse : [];
+      const connectionsData = Array.isArray(connectionsResponse) ? connectionsResponse : [];
       
-      setRooms(Array.isArray(roomsData) ? roomsData : []);
-      setConnections(Array.isArray(connectionsData) ? connectionsData : []);
+      setRooms(roomsData);
+      setConnections(connectionsData);
       
     } catch (error) {
       console.error('Error fetching data:', error);

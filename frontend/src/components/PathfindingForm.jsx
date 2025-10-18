@@ -47,11 +47,10 @@ const PathfindingForm = ({ rooms, connections }) => {
         start: startRoom.id
       });
       
-      const response = await pathfindingAPI.findPath(tujuan, startRoom.id);
+      // FIXED: Langsung menggunakan response yang sudah dinormalisasi
+      const resultData = await pathfindingAPI.findPath(tujuan, startRoom.id);
       
-      console.log('✅ Pathfinding response:', response);
-      
-      const resultData = response.data || response;
+      console.log('✅ Pathfinding response:', resultData);
       
       if (!resultData) {
         throw new Error('Invalid response from server');
@@ -282,14 +281,14 @@ const PathfindingForm = ({ rooms, connections }) => {
                 result.status === 'penuh' ? 'text-red-600' : 'text-gray-600'
               }`}>
                 {result.status === 'aman' ? '✅' : 
-                 result.status === 'penuh' ? '❌' : '⚠️'}
+                result.status === 'penuh' ? '❌' : '⚠️'}
               </span>
               <h4 className={`text-lg font-bold ${
                 result.status === 'aman' ? 'text-green-800' : 
                 result.status === 'penuh' ? 'text-red-800' : 'text-gray-800'
               }`}>
                 {result.status === 'aman' ? 'JALUR OPTIMAL DITEMUKAN' : 
-                 result.status === 'penuh' ? 'JALUR TERHALANG' : 'HASIL PENCARIAN'}
+                result.status === 'penuh' ? 'JALUR TERHALANG' : 'HASIL PENCARIAN'}
               </h4>
             </div>
             
@@ -298,7 +297,7 @@ const PathfindingForm = ({ rooms, connections }) => {
                 {/* Optimal Path */}
                 <div className="bg-white p-3 rounded-lg border border-green-200 shadow-sm">
                   <p className="font-semibold text-green-800 mb-3 text-sm">🏆 JALUR OPTIMAL:</p>
-                  <div className="flex flex-col space-y-2">
+                  <div className="flex flex-wrap gap-2 justify-center">
                     {result.jalur_optimal.map((room, index) => (
                       <div key={index} className="flex items-center">
                         <span className={`px-3 py-2 rounded-lg text-sm font-bold flex items-center min-w-[120px] ${
@@ -322,6 +321,33 @@ const PathfindingForm = ({ rooms, connections }) => {
                     <span>👥 Occupancy: {result.occupancy_tujuan || 'N/A'}</span>
                   </div>
                 </div>
+
+                {/* All Possible Routes - NEW: Tampilkan semua kemungkinan rute */}
+                {result.semua_kemungkinan_rute && result.semua_kemungkinan_rute.length > 1 && (
+                  <div className="bg-white p-3 rounded-lg border border-blue-200 shadow-sm">
+                    <p className="font-semibold text-blue-800 mb-3 text-sm">📊 SEMUA KEMUNGKINAN RUTE:</p>
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {result.semua_kemungkinan_rute.map((route, index) => (
+                        <div key={index} className={`p-2 rounded-lg border ${
+                          route.is_optimal ? 'bg-yellow-50 border-yellow-300' : 'bg-gray-50 border-gray-200'
+                        }`}>
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-sm font-medium">
+                              Rute {index + 1} {route.is_optimal && '🏆'}
+                            </span>
+                            <div className="text-xs text-gray-600 space-x-2">
+                              <span>Skor: {route.efisiensi_score || 0}</span>
+                              <span>Langkah: {route.langkah || 0}</span>
+                            </div>
+                          </div>
+                          <div className="text-xs text-gray-600 flex items-center space-x-1 truncate">
+                            <span>{route.rute?.join(' → ')}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             
@@ -340,22 +366,6 @@ const PathfindingForm = ({ rooms, connections }) => {
                       </div>
                     ))}
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* Additional Results Info */}
-            {result.all_routes && result.all_routes.length > 0 && (
-              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm text-blue-800 font-medium mb-2">
-                  📊 Analisis Semua Rute:
-                </p>
-                <div className="text-xs text-blue-700 space-y-1">
-                  <div>• Ditemukan {result.all_routes.length} rute alternatif</div>
-                  <div>• Rute optimal dipilih berdasarkan efisiensi</div>
-                  {result.efficiency_score && (
-                    <div>• Skor efisiensi: {result.efficiency_score.toFixed(2)}/100</div>
-                  )}
                 </div>
               </div>
             )}

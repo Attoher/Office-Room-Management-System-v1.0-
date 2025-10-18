@@ -1,35 +1,17 @@
 import pool from '../db.js';
-
-// Helper function untuk standardized response
-const sendSuccess = (res, data, message = 'Success', statusCode = 200) => {
-  res.status(statusCode).json({
-    status: 'success',
-    data,
-    message,
-    count: Array.isArray(data) ? data.length : undefined
-  });
-};
-
-const sendError = (res, error, statusCode = 500) => {
-  console.error('❌ Controller Error:', error);
-  res.status(statusCode).json({
-    status: 'error',
-    error: error.message || 'Internal server error',
-    ...(process.env.NODE_ENV === 'development' && { 
-      details: error.details,
-      stack: error.stack 
-    })
-  });
-};
+import { sendSuccess, sendError } from '../utils/responseHelper.js';
+import { logger } from '../utils/logger.js';
 
 export const getAllRooms = async (req, res) => {
   try {
-    console.log('📦 Fetching all rooms...');
-    const result = await pool.query('SELECT * FROM rooms ORDER BY id');
-    console.log(`✅ Found ${result.rows.length} rooms`);
+    logger.info('Fetching all rooms');
     
+    const result = await pool.query('SELECT * FROM rooms ORDER BY id');
+    
+    logger.info(`Found ${result.rows.length} rooms`);
     sendSuccess(res, result.rows, 'Rooms fetched successfully');
   } catch (error) {
+    logger.error('Failed to fetch rooms', error);
     sendError(res, error);
   }
 };
@@ -37,16 +19,18 @@ export const getAllRooms = async (req, res) => {
 export const getRoomById = async (req, res) => {
   try {
     const { id } = req.params;
-    console.log(`📦 Fetching room with ID: ${id}`);
+    logger.info(`Fetching room with ID: ${id}`);
     
     const result = await pool.query('SELECT * FROM rooms WHERE id = $1', [id]);
     
     if (result.rows.length === 0) {
+      logger.warn(`Room not found with ID: ${id}`);
       return sendError(res, new Error('Room not found'), 404);
     }
     
     sendSuccess(res, result.rows[0], 'Room fetched successfully');
   } catch (error) {
+    logger.error(`Failed to fetch room with ID: ${req.params.id}`, error);
     sendError(res, error);
   }
 };
@@ -55,30 +39,19 @@ export const createRoom = async (req, res) => {
   try {
     const { nama_ruangan, luas, kapasitas_max, occupancy = 0 } = req.body;
     
-    console.log('🆕 Creating new room:', { nama_ruangan, luas, kapasitas_max, occupancy });
+    logger.info('Creating new room', { nama_ruangan, luas, kapasitas_max, occupancy });
     
-    // Enhanced validation
-    if (!nama_ruangan?.trim()) {
-      return sendError(res, new Error('Room name is required'), 400);
-    }
-    if (!luas || parseFloat(luas) <= 0) {
-      return sendError(res, new Error('Valid room area is required'), 400);
-    }
-    if (!kapasitas_max || parseInt(kapasitas_max) <= 0) {
-      return sendError(res, new Error('Valid maximum capacity is required'), 400);
-    }
-
     const result = await pool.query(
       `INSERT INTO rooms (nama_ruangan, luas, kapasitas_max, occupancy) 
        VALUES ($1, $2, $3, $4) 
        RETURNING *`,
-      [nama_ruangan.trim(), parseFloat(luas), parseInt(kapasitas_max), parseInt(occupancy)]
+      [nama_ruangan, luas, kapasitas_max, occupancy]
     );
     
-    console.log('✅ Room created:', result.rows[0].nama_ruangan);
+    logger.info(`Room created successfully: ${result.rows[0].nama_ruangan}`);
     sendSuccess(res, result.rows[0], 'Room created successfully', 201);
   } catch (error) {
-    console.error('❌ Error creating room:', error);
+    logger.error('Failed to create room', error, { nama_ruangan: req.body.nama_ruangan });
     
     if (error.code === '23505') {
       sendError(res, new Error('Room name already exists'), 400);
@@ -93,11 +66,12 @@ export const updateRoom = async (req, res) => {
     const { id } = req.params;
     const { nama_ruangan, luas, kapasitas_max, occupancy } = req.body;
     
-    console.log(`✏️ Updating room ${id}:`, { nama_ruangan, luas, kapasitas_max, occupancy });
+    logger.info(`Updating room ${id}`, { nama_ruangan, luas, kapasitas_max, occupancy });
     
     // Check if room exists first
     const existingRoom = await pool.query('SELECT * FROM rooms WHERE id = $1', [id]);
     if (existingRoom.rows.length === 0) {
+      logger.warn(`Room not found for update: ${id}`);
       return sendError(res, new Error('Room not found'), 404);
     }
 
@@ -106,11 +80,13 @@ export const updateRoom = async (req, res) => {
        SET nama_ruangan = $1, luas = $2, kapasitas_max = $3, occupancy = $4, updated_at = CURRENT_TIMESTAMP 
        WHERE id = $5 
        RETURNING *`,
-      [nama_ruangan, parseFloat(luas), parseInt(kapasitas_max), parseInt(occupancy), id]
+      [nama_ruangan, luas, kapasitas_max, occupancy, id]
     );
     
+    logger.info(`Room updated successfully: ${result.rows[0].nama_ruangan}`);
     sendSuccess(res, result.rows[0], 'Room updated successfully');
   } catch (error) {
+    logger.error(`Failed to update room: ${req.params.id}`, error);
     sendError(res, error);
   }
 };
@@ -118,11 +94,12 @@ export const updateRoom = async (req, res) => {
 export const deleteRoom = async (req, res) => {
   try {
     const { id } = req.params;
-    console.log(`🗑️ Deleting room ${id}...`);
+    logger.info(`Deleting room ${id}`);
     
     // Check if room exists first
     const existingRoom = await pool.query('SELECT * FROM rooms WHERE id = $1', [id]);
     if (existingRoom.rows.length === 0) {
+      logger.warn(`Room not found for deletion: ${id}`);
       return sendError(res, new Error('Room not found'), 404);
     }
 
@@ -137,9 +114,10 @@ export const deleteRoom = async (req, res) => {
       [id]
     );
     
-    console.log('✅ Room deleted:', result.rows[0].nama_ruangan);
+    logger.info(`Room deleted successfully: ${result.rows[0].nama_ruangan}`);
     sendSuccess(res, result.rows[0], 'Room deleted successfully');
   } catch (error) {
+    logger.error(`Failed to delete room: ${req.params.id}`, error);
     sendError(res, error);
   }
 };
@@ -149,12 +127,8 @@ export const updateOccupancy = async (req, res) => {
     const { id } = req.params;
     const { occupancy } = req.body;
     
-    console.log(`👥 Updating occupancy for room ${id}: ${occupancy}`);
+    logger.info(`Updating occupancy for room ${id}`, { occupancy });
     
-    if (occupancy === undefined || occupancy === null) {
-      return sendError(res, new Error('Occupancy value is required'), 400);
-    }
-
     // Validate room exists and occupancy doesn't exceed max capacity
     const roomResult = await pool.query(
       'SELECT kapasitas_max FROM rooms WHERE id = $1', 
@@ -162,6 +136,7 @@ export const updateOccupancy = async (req, res) => {
     );
     
     if (roomResult.rows.length === 0) {
+      logger.warn(`Room not found for occupancy update: ${id}`);
       return sendError(res, new Error('Room not found'), 404);
     }
     
@@ -187,19 +162,24 @@ export const updateOccupancy = async (req, res) => {
     const updatedRoom = result.rows[0];
     const percentage = (updatedRoom.occupancy / updatedRoom.kapasitas_max) * 100;
     
-    sendSuccess(res, {
+    const responseData = {
       ...updatedRoom,
       occupancy_percentage: `${percentage.toFixed(1)}%`,
       status: percentage < 70 ? 'hijau' : percentage < 90 ? 'kuning' : 'merah'
-    }, 'Occupancy updated successfully');
+    };
+    
+    logger.info(`Occupancy updated successfully for room: ${updatedRoom.nama_ruangan}`);
+    sendSuccess(res, responseData, 'Occupancy updated successfully');
   } catch (error) {
+    logger.error(`Failed to update occupancy for room: ${req.params.id}`, error);
     sendError(res, error);
   }
 };
 
-// Additional utility endpoint
 export const getRoomStats = async (req, res) => {
   try {
+    logger.info('Calculating room statistics');
+    
     const result = await pool.query('SELECT * FROM rooms ORDER BY id');
     const rooms = result.rows;
     
@@ -216,11 +196,27 @@ export const getRoomStats = async (req, res) => {
           return percent >= 70 && percent < 90;
         }).length,
         merah: rooms.filter(r => (r.occupancy / r.kapasitas_max) * 100 >= 90).length
+      },
+      rooms_by_status: {
+        hijau: rooms.filter(r => (r.occupancy / r.kapasitas_max) * 100 < 70)
+          .map(r => ({ id: r.id, name: r.nama_ruangan })),
+        kuning: rooms.filter(r => {
+          const percent = (r.occupancy / r.kapasitas_max) * 100;
+          return percent >= 70 && percent < 90;
+        }).map(r => ({ id: r.id, name: r.nama_ruangan })),
+        merah: rooms.filter(r => (r.occupancy / r.kapasitas_max) * 100 >= 90)
+          .map(r => ({ id: r.id, name: r.nama_ruangan }))
       }
     };
     
+    logger.info('Room statistics calculated successfully', {
+      total_rooms: stats.total_rooms,
+      status_breakdown: stats.status_breakdown
+    });
+    
     sendSuccess(res, stats, 'Room statistics calculated successfully');
   } catch (error) {
+    logger.error('Failed to calculate room statistics', error);
     sendError(res, error);
   }
 };

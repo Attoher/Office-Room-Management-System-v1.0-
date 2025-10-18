@@ -8,6 +8,7 @@ import {
   updateOccupancy,
   getRoomStats
 } from '../controllers/roomController.js';
+import { validateRoomData } from '../utils/validation.js';
 
 const router = express.Router();
 
@@ -17,8 +18,8 @@ router.get('/stats', getRoomStats);
 // Standard CRUD operations
 router.get('/', getAllRooms);
 router.get('/:id', getRoomById);
-router.post('/', createRoom);
-router.put('/:id', updateRoom);
+router.post('/', validateRoomData, createRoom);
+router.put('/:id', validateRoomData, updateRoom);
 router.delete('/:id', deleteRoom);
 router.put('/:id/occupancy', updateOccupancy);
 
